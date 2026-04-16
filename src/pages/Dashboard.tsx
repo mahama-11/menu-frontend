@@ -6,7 +6,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { authService } from '@/services/auth';
 import type { Activity } from '@/services/auth';
 import { referralService } from '@/services/referral';
-import type { ReferralOverview } from '@/types/referral';
+import type { ReferralOverview, ReferralCode, ReferralConversion, Commission } from '@/types/referral';
 import { useToastStore } from '@/store/toastStore';
 import { 
   History, 
@@ -41,6 +41,11 @@ export default function Dashboard() {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [hasReferralAccess, setHasReferralAccess] = useState(false);
   const [canManageReferral, setCanManageReferral] = useState(false);
+  const [referralTab, setReferralTab] = useState<'overview' | 'codes' | 'conversions' | 'commissions'>('overview');
+  const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [referralConversions, setReferralConversions] = useState<ReferralConversion[]>([]);
+  const [referralCommissions, setReferralCommissions] = useState<Commission[]>([]);
+  const [isReferralLoading, setIsReferralLoading] = useState(false);
 
   // Sync state if user loads later
   useEffect(() => {
@@ -93,19 +98,59 @@ export default function Dashboard() {
       setCanManageReferral(perms.includes('menu.referral.manage'));
 
       if (canRead && activeSection === 'referral') {
-        fetchReferralOverview();
+        if (referralTab === 'overview') fetchReferralOverview();
+        else if (referralTab === 'codes') fetchReferralCodes();
+        else if (referralTab === 'conversions') fetchReferralConversions();
+        else if (referralTab === 'commissions') fetchReferralCommissions();
       }
     }
-  }, [user, activeSection]);
+  }, [user, activeSection, referralTab]);
 
   const fetchReferralOverview = async () => {
+    setIsReferralLoading(true);
     try {
       const res = await referralService.getOverview();
-      if (res && res.data) {
-        setReferralOverview(res.data);
-      }
+      if (res && res.data) setReferralOverview(res.data);
     } catch (err) {
       console.error('Failed to fetch referral overview:', err);
+    } finally {
+      setIsReferralLoading(false);
+    }
+  };
+
+  const fetchReferralCodes = async () => {
+    setIsReferralLoading(true);
+    try {
+      const res = await referralService.getCodes();
+      if (res && res.data) setReferralCodes(res.data.codes);
+    } catch (err) {
+      console.error('Failed to fetch referral codes:', err);
+    } finally {
+      setIsReferralLoading(false);
+    }
+  };
+
+  const fetchReferralConversions = async () => {
+    setIsReferralLoading(true);
+    try {
+      const res = await referralService.getConversions();
+      if (res && res.data) setReferralConversions(res.data.conversions);
+    } catch (err) {
+      console.error('Failed to fetch conversions:', err);
+    } finally {
+      setIsReferralLoading(false);
+    }
+  };
+
+  const fetchReferralCommissions = async () => {
+    setIsReferralLoading(true);
+    try {
+      const res = await referralService.getCommissions();
+      if (res && res.data) setReferralCommissions(res.data.commissions);
+    } catch (err) {
+      console.error('Failed to fetch commissions:', err);
+    } finally {
+      setIsReferralLoading(false);
     }
   };
 
@@ -117,7 +162,8 @@ export default function Dashboard() {
       const programId = referralOverview.programs[0].id;
       await referralService.createCode(programId);
       showToast('Referral code created successfully!', 'success');
-      fetchReferralOverview(); // Refresh overview to get new code
+      if (referralTab === 'overview') fetchReferralOverview();
+      else if (referralTab === 'codes') fetchReferralCodes();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to create code';
       showToast(errorMsg, 'error');
@@ -539,127 +585,286 @@ export default function Dashboard() {
           {/* Referral Section */}
           {activeSection === 'referral' && hasReferralAccess && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Referral Program</h2>
-                <p className="text-gray-400">Invite other restaurants and earn commissions on their spending.</p>
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-3xl font-bold text-white mb-2">Referral Program</h2>
+                  <p className="text-gray-400">Invite other restaurants and earn commissions on their spending.</p>
+                </div>
+                {canManageReferral && referralTab === 'codes' && (
+                  <button 
+                    onClick={handleGenerateCode}
+                    disabled={isGeneratingCode}
+                    className="btn-primary py-2 px-4 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isGeneratingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Generate Invite Code
+                  </button>
+                )}
               </div>
 
-              {referralOverview ? (
-                <div className="space-y-6">
-                  {/* Stats Row */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="glass rounded-2xl p-6 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Users className="w-12 h-12" />
-                      </div>
-                      <p className="text-sm text-gray-400 font-medium mb-1">Total Conversions</p>
-                      <p className="text-3xl font-bold text-white">{referralOverview.total_conversions}</p>
-                    </div>
-                    
-                    <div className="glass rounded-2xl p-6 relative overflow-hidden border border-primary-500/20">
-                      <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <Wallet className="w-12 h-12 text-primary-500" />
-                      </div>
-                      <p className="text-sm text-gray-400 font-medium mb-1">Earned Commissions</p>
-                      <div className="flex items-baseline gap-1">
-                        <p className="text-3xl font-bold text-primary-400">{referralOverview.total_commissions_earned}</p>
-                        <p className="text-sm text-primary-500/50 mb-1">{referralOverview.currency}</p>
-                      </div>
-                    </div>
+              {/* Sub-navigation */}
+              <div className="flex overflow-x-auto no-scrollbar gap-2 mb-6 border-b border-white/10 pb-2">
+                {[
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'codes', label: 'My Codes' },
+                  { id: 'conversions', label: 'My Conversions' },
+                  { id: 'commissions', label: 'My Commissions' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setReferralTab(tab.id as 'overview' | 'codes' | 'conversions' | 'commissions')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                      referralTab === tab.id 
+                        ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30' 
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                    <div className="glass rounded-2xl p-6 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <History className="w-12 h-12" />
+              {isReferralLoading && !referralOverview && referralTab === 'overview' ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                </div>
+              ) : (
+                <>
+                  {/* OVERVIEW TAB */}
+                  {referralTab === 'overview' && referralOverview && (
+                    <div className="space-y-6 animate-in fade-in">
+                      {/* Stats Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="glass rounded-2xl p-6 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Users className="w-12 h-12" />
+                          </div>
+                          <p className="text-sm text-gray-400 font-medium mb-1">Total Conversions</p>
+                          <p className="text-3xl font-bold text-white">{referralOverview.total_conversions}</p>
+                        </div>
+                        
+                        <div className="glass rounded-2xl p-6 relative overflow-hidden border border-primary-500/20">
+                          <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Wallet className="w-12 h-12 text-primary-500" />
+                          </div>
+                          <p className="text-sm text-gray-400 font-medium mb-1">Earned Commissions</p>
+                          <div className="flex items-baseline gap-1">
+                            <p className="text-3xl font-bold text-primary-400">{referralOverview.total_commissions_earned}</p>
+                            <p className="text-sm text-primary-500/50 mb-1">{referralOverview.currency}</p>
+                          </div>
+                        </div>
+
+                        <div className="glass rounded-2xl p-6 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <History className="w-12 h-12" />
+                          </div>
+                          <p className="text-sm text-gray-400 font-medium mb-1">Pending Settlements</p>
+                          <div className="flex items-baseline gap-1">
+                            <p className="text-3xl font-bold text-white">{referralOverview.total_commissions_pending}</p>
+                            <p className="text-sm text-gray-500 mb-1">{referralOverview.currency}</p>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-400 font-medium mb-1">Pending Settlements</p>
-                      <div className="flex items-baseline gap-1">
-                        <p className="text-3xl font-bold text-white">{referralOverview.total_commissions_pending}</p>
-                        <p className="text-sm text-gray-500 mb-1">{referralOverview.currency}</p>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Your Codes (Preview) */}
+                        <div className="glass rounded-2xl p-6">
+                          <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              <Tag className="w-5 h-5 text-primary-400" />
+                              Active Invite Codes
+                            </h3>
+                            <button onClick={() => setReferralTab('codes')} className="text-xs text-primary-400 hover:underline">View All</button>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {referralOverview.active_codes?.length > 0 ? (
+                              referralOverview.active_codes.slice(0, 3).map((code) => (
+                                <div key={code.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-colors">
+                                  <div>
+                                    <p className="text-xl font-mono font-bold tracking-wider text-white mb-1">{code.code}</p>
+                                    <p className="text-xs text-gray-500">Created {new Date(code.created_at).toLocaleDateString()}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => handleCopyCode(code.code)}
+                                    className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-primary-400 group-hover:bg-primary-500/20 transition-all"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-8 text-gray-500 border border-dashed border-white/10 rounded-xl">
+                                <p className="text-sm">No active referral codes yet.</p>
+                                {canManageReferral && (
+                                  <button onClick={() => setReferralTab('codes')} className="text-primary-400 hover:underline text-sm mt-2">Generate your first code</button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Recent Activity (Preview) */}
+                        <div className="glass rounded-2xl p-6">
+                          <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              <History className="w-5 h-5 text-primary-400" />
+                              Recent Conversions
+                            </h3>
+                            <button onClick={() => setReferralTab('conversions')} className="text-xs text-primary-400 hover:underline">View All</button>
+                          </div>
+                          
+                          <div className="space-y-4">
+                            {referralOverview.recent_conversions?.length > 0 ? (
+                              referralOverview.recent_conversions.slice(0, 5).map((conv) => (
+                                <div key={conv.id} className="border-l-2 border-primary-500/30 pl-4 relative pb-2">
+                                  <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary-500"></div>
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="text-sm font-medium text-white">New {conv.trigger_type.replace('_', ' ')} Sign-up</p>
+                                      <p className="text-xs text-gray-500 mt-0.5">{new Date(conv.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                    <span className="text-sm font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</span>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-center py-8 text-gray-500">
+                                <p className="text-sm">No conversions recorded yet.</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Your Codes */}
-                    <div className="glass rounded-2xl p-6">
-                      <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                          <Tag className="w-5 h-5 text-primary-400" />
-                          Your Invite Codes
-                        </h3>
-                        {canManageReferral && (
-                          <button 
-                            onClick={handleGenerateCode}
-                            disabled={isGeneratingCode}
-                            className="text-xs bg-primary-500 hover:bg-primary-400 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {isGeneratingCode ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                            Generate New
-                          </button>
-                        )}
-                      </div>
-                      
+                  {/* CODES TAB */}
+                  {referralTab === 'codes' && (
+                    <div className="glass rounded-2xl p-6 animate-in fade-in">
                       <div className="space-y-3">
-                        {referralOverview.active_codes?.length > 0 ? (
-                          referralOverview.active_codes.map((code) => (
-                            <div key={code.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-colors">
+                        {isReferralLoading ? (
+                           <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary-500" /></div>
+                        ) : referralCodes.length > 0 ? (
+                          referralCodes.map((code) => (
+                            <div key={code.id} className="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:bg-white/10 transition-colors">
                               <div>
-                                <p className="text-xl font-mono font-bold tracking-wider text-white mb-1">{code.code}</p>
-                                <p className="text-xs text-gray-500">Created {new Date(code.created_at).toLocaleDateString()}</p>
+                                <p className="text-2xl font-mono font-bold tracking-widest text-white mb-1">{code.code}</p>
+                                <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300 capitalize">{code.status}</span>
+                                  <span>Created: {new Date(code.created_at).toLocaleDateString()}</span>
+                                </div>
                               </div>
                               <button 
                                 onClick={() => handleCopyCode(code.code)}
-                                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-primary-400 group-hover:bg-primary-500/20 transition-all"
+                                className="px-4 py-2 rounded-lg bg-white/5 text-gray-300 hover:text-primary-400 hover:bg-primary-500/20 transition-all flex items-center gap-2"
                               >
-                                <Copy className="w-4 h-4" />
+                                <Copy className="w-4 h-4" /> Copy Code
                               </button>
                             </div>
                           ))
                         ) : (
-                          <div className="text-center py-8 text-gray-500 border border-dashed border-white/10 rounded-xl">
-                            <p className="text-sm">No active referral codes yet.</p>
+                          <div className="text-center py-16 text-gray-500 border border-dashed border-white/10 rounded-xl">
+                            <Tag className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                            <p className="text-lg text-white mb-1">No invite codes yet</p>
+                            <p className="text-sm mb-4">Generate an invite code to start earning commissions.</p>
                             {canManageReferral && (
-                              <button onClick={handleGenerateCode} className="text-primary-400 hover:underline text-sm mt-2">Generate your first code</button>
+                              <button onClick={handleGenerateCode} className="btn-primary py-2 px-4 rounded-lg text-sm font-bold inline-flex items-center gap-2">
+                                <Plus className="w-4 h-4" /> Generate Code
+                              </button>
                             )}
                           </div>
                         )}
                       </div>
                     </div>
+                  )}
 
-                    {/* Recent Activity */}
-                    <div className="glass rounded-2xl p-6">
-                      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                        <History className="w-5 h-5 text-primary-400" />
-                        Recent Conversions
-                      </h3>
-                      
-                      <div className="space-y-4">
-                        {referralOverview.recent_conversions?.length > 0 ? (
-                          referralOverview.recent_conversions.map((conv) => (
-                            <div key={conv.id} className="border-l-2 border-primary-500/30 pl-4 relative pb-2">
-                              <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary-500"></div>
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="text-sm font-medium text-white">New {conv.trigger_type} Sign-up</p>
-                                  <p className="text-xs text-gray-500 mt-0.5">{new Date(conv.created_at).toLocaleDateString()}</p>
-                                </div>
-                                <span className="text-sm font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</span>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-8 text-gray-500">
-                            <p className="text-sm">No conversions recorded yet.</p>
-                          </div>
-                        )}
+                  {/* CONVERSIONS TAB */}
+                  {referralTab === 'conversions' && (
+                    <div className="glass rounded-2xl p-6 animate-in fade-in overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-white/10 text-gray-400">
+                              <th className="pb-3 font-medium">Date</th>
+                              <th className="pb-3 font-medium">Type</th>
+                              <th className="pb-3 font-medium">Status</th>
+                              <th className="pb-3 font-medium text-right">Commission</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {isReferralLoading ? (
+                              <tr><td colSpan={4} className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-primary-500 mx-auto" /></td></tr>
+                            ) : referralConversions.length > 0 ? (
+                              referralConversions.map(conv => (
+                                <tr key={conv.id} className="hover:bg-white/5 transition-colors">
+                                  <td className="py-4 text-gray-300">{new Date(conv.created_at).toLocaleDateString()}</td>
+                                  <td className="py-4 text-white capitalize">{conv.trigger_type.replace('_', ' ')}</td>
+                                  <td className="py-4">
+                                    <span className={`px-2 py-1 rounded-full text-xs ${conv.status === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                                      {conv.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 text-right font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="py-16 text-center text-gray-500">
+                                  <History className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                  <p>No conversions found.</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
-                </div>
+                  )}
+
+                  {/* COMMISSIONS TAB */}
+                  {referralTab === 'commissions' && (
+                    <div className="glass rounded-2xl p-6 animate-in fade-in overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-white/10 text-gray-400">
+                              <th className="pb-3 font-medium">Date</th>
+                              <th className="pb-3 font-medium">Description</th>
+                              <th className="pb-3 font-medium">Status</th>
+                              <th className="pb-3 font-medium text-right">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {isReferralLoading ? (
+                              <tr><td colSpan={4} className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-primary-500 mx-auto" /></td></tr>
+                            ) : referralCommissions.length > 0 ? (
+                              referralCommissions.map(comm => (
+                                <tr key={comm.id} className="hover:bg-white/5 transition-colors">
+                                  <td className="py-4 text-gray-300">{new Date(comm.created_at).toLocaleDateString()}</td>
+                                  <td className="py-4 text-white">{comm.description || 'Referral Commission'}</td>
+                                  <td className="py-4">
+                                    <span className={`px-2 py-1 rounded-full text-xs ${comm.status === 'settled' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                      {comm.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 text-right font-bold text-white">{comm.amount} {comm.currency}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="py-16 text-center text-gray-500">
+                                  <Wallet className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                                  <p>No commissions found.</p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
