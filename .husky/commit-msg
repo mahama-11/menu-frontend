@@ -1,0 +1,6 @@
+echo "======================================"
+echo "📝 Checking Commit Message"
+echo "======================================"
+
+npx --no -- commitlint --edit "$1"
+
