@@ -5,10 +5,15 @@ import { useAuthStore } from '@/store/authStore';
 import { useI18n } from '@/hooks/useI18n';
 import { authService } from '@/services/auth';
 import type { Activity } from '@/services/auth';
-
+import { referralService } from '@/services/referral';
+import type { ReferralOverview } from '@/types/referral';
 import { useToastStore } from '@/store/toastStore';
+import { 
+  History, 
+  Plus, Wallet, Users, Tag, Copy, Loader2
+} from 'lucide-react';
 
-type Section = 'home' | 'create' | 'history' | 'settings';
+type Section = 'home' | 'create' | 'history' | 'referral' | 'settings';
 
 export default function Dashboard() {
   const { user, logout } = useAuthStore();
@@ -31,11 +36,17 @@ export default function Dashboard() {
 
   const [activityLog, setActivityLog] = useState<Activity[]>([]);
 
+  // Referral data
+  const [referralOverview, setReferralOverview] = useState<ReferralOverview | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [hasReferralAccess, setHasReferralAccess] = useState(false);
+  const [canManageReferral, setCanManageReferral] = useState(false);
+
   // Sync state if user loads later
   useEffect(() => {
     if (user) {
-      if (!profileName) setProfileName(user.name || user.full_name || '');
-      if (!profileRestaurantName) setProfileRestaurantName(user.restaurant_name || '');
+      setProfileName(prev => prev || user.name || user.full_name || '');
+      setProfileRestaurantName(prev => prev || user.restaurant_name || '');
     }
   }, [user]);
 
@@ -73,31 +84,77 @@ export default function Dashboard() {
     fetchDashboardData();
   }, [setLang]);
 
+  useEffect(() => {
+    // Check referral permissions from auth session response
+    if (user && user.access) {
+      const perms = user.access.menu_permissions || [];
+      const canRead = perms.includes('menu.referral.read');
+      setHasReferralAccess(canRead);
+      setCanManageReferral(perms.includes('menu.referral.manage'));
+
+      if (canRead && activeSection === 'referral') {
+        fetchReferralOverview();
+      }
+    }
+  }, [user, activeSection]);
+
+  const fetchReferralOverview = async () => {
+    try {
+      const res = await referralService.getOverview();
+      if (res && res.data) {
+        setReferralOverview(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch referral overview:', err);
+    }
+  };
+
+  const handleGenerateCode = async () => {
+    if (!referralOverview?.programs?.[0]) return;
+    
+    setIsGeneratingCode(true);
+    try {
+      const programId = referralOverview.programs[0].id;
+      await referralService.createCode(programId);
+      showToast('Referral code created successfully!', 'success');
+      fetchReferralOverview(); // Refresh overview to get new code
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to create code';
+      showToast(errorMsg, 'error');
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    showToast('Code copied to clipboard!', 'success');
+  };
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const useFeature = (feat: string, cost: number) => {
+  const handleFeatureClick = (feat: string, cost: number) => {
     if (cost > 0 && credits < cost) {
       const msgs = { th: 'เครดิตไม่เพียงพอ กรุณาอัปเกรดแผน', zh: '积分不足，请升级套餐', en: 'Not enough credits. Please upgrade your plan.' };
       showToast(msgs[lang as keyof typeof msgs] || msgs.en, 'error');
       return;
     }
 
-    const featNames = {
-      enhance: { th: 'ปรับปรุงภาพ AI', zh: 'AI 图片优化', en: 'AI Image Enhancement' },
-      copy: { th: 'AI เขียนคำโฆษณา', zh: 'AI 文案生成', en: 'AI Copywriting' },
-      layout: { th: 'จัดเลย์เอาต์เมนู', zh: '菜单排版设计', en: 'Menu Layout Design' },
-      social: { th: 'ส่งออกโซเชียลมีเดีย', zh: '社交媒体导出', en: 'Social Media Export' },
-      poster: { th: 'โปสเตอร์รีวิว', zh: '评价海报', en: 'Review Poster' },
-      festival: { th: 'แม่แบบเทศกาลไทย', zh: '泰国节日模板', en: 'Thai Festival Templates' },
-    };
-
-    const newCredits = Math.max(0, credits - cost);
+    const newCredits = credits - cost;
     setCredits(newCredits);
 
-    const now = new Date();
+    const featNames = {
+      enhance: { en: 'Image Enhancement', zh: '图片画质增强', th: 'การปรับปรุงภาพ' },
+      copy: { en: 'AI Copywriting', zh: 'AI 营销文案', th: 'การเขียนคำโฆษณา AI' },
+      layout: { en: 'Menu Layout Design', zh: '菜单排版设计', th: 'การออกแบบเลย์เอาต์' },
+      social: { en: 'Social Export', zh: '社交媒体导出', th: 'ส่งออกโซเชียลมีเดีย' },
+      poster: { en: 'Review Poster', zh: '评价海报生成', th: 'โปสเตอร์รีวิว' },
+      festival: { en: 'Festival Template', zh: '节日促销模板', th: 'เทมเพลตเทศกาล' }
+    };
+
     const actionName = featNames[feat as keyof typeof featNames]?.[lang as 'th'|'zh'|'en'] || feat;
 
     // Build a fake Activity to push immediately for better UX
@@ -106,7 +163,7 @@ export default function Dashboard() {
       action_type: feat,
       action_name: actionName, 
       credits_used: cost, 
-      created_at: now.toISOString() 
+      created_at: new Date().toISOString() 
     }, ...activityLog].slice(0, 10);
     
     setActivityLog(newLog);
@@ -236,6 +293,12 @@ export default function Dashboard() {
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
             <span>{tDash('dash.nav.history')}</span>
           </button>
+          {hasReferralAccess && (
+            <button onClick={() => setActiveSection('referral')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 ${activeSection === 'referral' ? 'text-white bg-primary-500/15 border border-primary-500/30' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
+              <Users width="16" height="16" className="text-current" />
+              <span>Referral Program</span>
+            </button>
+          )}
           <button onClick={() => setActiveSection('settings')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 ${activeSection === 'settings' ? 'text-white bg-primary-500/15 border border-primary-500/30' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             <span>{tDash('dash.nav.settings')}</span>
@@ -336,7 +399,7 @@ export default function Dashboard() {
               <h2 className="text-base font-bold mb-4">{tDash('dash.quickActions')}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                 
-                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => useFeature('enhance', 10)}>
+                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => handleFeatureClick('enhance', 10)}>
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/10 flex items-center justify-center mb-3">
                     <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#f97316" strokeWidth="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   </div>
@@ -345,7 +408,7 @@ export default function Dashboard() {
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-primary-400/10 text-primary-400">10 cr</span>
                 </div>
 
-                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => useFeature('copy', 0)}>
+                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => handleFeatureClick('copy', 0)}>
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center mb-3">
                     <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#a855f7" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                   </div>
@@ -354,7 +417,7 @@ export default function Dashboard() {
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-green-400/10 text-green-400">{tDash('dash.free')}</span>
                 </div>
 
-                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => useFeature('layout', 10)}>
+                <div className="glass hover:bg-white/[0.06] hover:border-primary-500/30 hover:-translate-y-1 transition-all rounded-xl p-5 cursor-pointer" onClick={() => handleFeatureClick('layout', 10)}>
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center mb-3">
                     <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                   </div>
@@ -364,7 +427,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Pro-locked: Social export */}
-                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => useFeature('social', 10)}>
+                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => handleFeatureClick('social', 10)}>
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl z-10 opacity-100 group-hover:opacity-0 transition-opacity">
                     <div className="text-center">
                       <svg className="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -380,7 +443,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Pro-locked: Review poster */}
-                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => useFeature('poster', 10)}>
+                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => handleFeatureClick('poster', 10)}>
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl z-10 opacity-100 group-hover:opacity-0 transition-opacity">
                     <div className="text-center">
                       <svg className="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -396,7 +459,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Growth-locked: Festival template */}
-                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => useFeature('festival', 10)}>
+                <div className="glass rounded-xl p-5 cursor-pointer relative overflow-hidden group" onClick={() => handleFeatureClick('festival', 10)}>
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-xl z-10 opacity-100 group-hover:opacity-0 transition-opacity">
                     <div className="text-center">
                       <svg className="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -470,6 +533,134 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Referral Section */}
+          {activeSection === 'referral' && hasReferralAccess && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-white mb-2">Referral Program</h2>
+                <p className="text-gray-400">Invite other restaurants and earn commissions on their spending.</p>
+              </div>
+
+              {referralOverview ? (
+                <div className="space-y-6">
+                  {/* Stats Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="glass rounded-2xl p-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Users className="w-12 h-12" />
+                      </div>
+                      <p className="text-sm text-gray-400 font-medium mb-1">Total Conversions</p>
+                      <p className="text-3xl font-bold text-white">{referralOverview.total_conversions}</p>
+                    </div>
+                    
+                    <div className="glass rounded-2xl p-6 relative overflow-hidden border border-primary-500/20">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <Wallet className="w-12 h-12 text-primary-500" />
+                      </div>
+                      <p className="text-sm text-gray-400 font-medium mb-1">Earned Commissions</p>
+                      <div className="flex items-baseline gap-1">
+                        <p className="text-3xl font-bold text-primary-400">{referralOverview.total_commissions_earned}</p>
+                        <p className="text-sm text-primary-500/50 mb-1">{referralOverview.currency}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-2xl p-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                        <History className="w-12 h-12" />
+                      </div>
+                      <p className="text-sm text-gray-400 font-medium mb-1">Pending Settlements</p>
+                      <div className="flex items-baseline gap-1">
+                        <p className="text-3xl font-bold text-white">{referralOverview.total_commissions_pending}</p>
+                        <p className="text-sm text-gray-500 mb-1">{referralOverview.currency}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Your Codes */}
+                    <div className="glass rounded-2xl p-6">
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                          <Tag className="w-5 h-5 text-primary-400" />
+                          Your Invite Codes
+                        </h3>
+                        {canManageReferral && (
+                          <button 
+                            onClick={handleGenerateCode}
+                            disabled={isGeneratingCode}
+                            className="text-xs bg-primary-500 hover:bg-primary-400 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {isGeneratingCode ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                            Generate New
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {referralOverview.active_codes?.length > 0 ? (
+                          referralOverview.active_codes.map((code) => (
+                            <div key={code.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-colors">
+                              <div>
+                                <p className="text-xl font-mono font-bold tracking-wider text-white mb-1">{code.code}</p>
+                                <p className="text-xs text-gray-500">Created {new Date(code.created_at).toLocaleDateString()}</p>
+                              </div>
+                              <button 
+                                onClick={() => handleCopyCode(code.code)}
+                                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-primary-400 group-hover:bg-primary-500/20 transition-all"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-gray-500 border border-dashed border-white/10 rounded-xl">
+                            <p className="text-sm">No active referral codes yet.</p>
+                            {canManageReferral && (
+                              <button onClick={handleGenerateCode} className="text-primary-400 hover:underline text-sm mt-2">Generate your first code</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Recent Activity */}
+                    <div className="glass rounded-2xl p-6">
+                      <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                        <History className="w-5 h-5 text-primary-400" />
+                        Recent Conversions
+                      </h3>
+                      
+                      <div className="space-y-4">
+                        {referralOverview.recent_conversions?.length > 0 ? (
+                          referralOverview.recent_conversions.map((conv) => (
+                            <div key={conv.id} className="border-l-2 border-primary-500/30 pl-4 relative pb-2">
+                              <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary-500"></div>
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="text-sm font-medium text-white">New {conv.trigger_type} Sign-up</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">{new Date(conv.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <span className="text-sm font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            <p className="text-sm">No conversions recorded yet.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+                </div>
+              )}
             </div>
           )}
 

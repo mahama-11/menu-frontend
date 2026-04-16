@@ -57,7 +57,7 @@ export const authService = {
     return response as unknown as { data: ProfileResponse };
   },
 
-  updateProfile: async (name: string, restaurant_name: string, language_preference: string):Promise<any> => {
+  updateProfile: async (name: string, restaurant_name: string, language_preference: string):Promise<unknown> => {
     const response = await menuApiClient.patch('/user/profile', { name, restaurant_name, language_preference });
     return response;
   },

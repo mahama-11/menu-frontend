@@ -23,10 +23,10 @@ export default function RegisterPage() {
     try {
       const response = await authService.register(name, restaurantName, email, password);
       // Wait for a successful registration, then auto-login
-      login(response);
-      navigate('/dashboard');
-    } catch (err: any) {
-      const errMsg = err.message || 'Failed to create account. Please try again.';
+     login(response);
+      navigate('/dashboard', { replace: true });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to create account. Please try again.';
       showToast(errMsg, 'error');
     } finally {
       setLoading(false);

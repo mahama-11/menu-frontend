@@ -25,6 +25,7 @@ export interface User {
   orgs?: Organization[];
   organizations?: Organization[];
   last_active_org_id?: string;
+  access?: AccessContext;
 }
 
 export interface AccessContext {
@@ -54,9 +55,11 @@ export interface AuthResponse {
   access: AccessContext;
 }
 
-export interface APIResponse<T = any> {
+export interface APIResponse<T = unknown> {
   code: number;
   message: string;
   data: T;
   error?: string;
+  error_code?: string;
+  error_hint?: string;
 }

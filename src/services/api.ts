@@ -54,11 +54,14 @@ const applyInterceptors = (client: typeof platformApiClient) => {
       }
 
       if (resData && resData.code !== 0 && resData.code !== 200) {
-        let errorMsg = resData.message || resData.error || 'Unknown business error';
-        // Special case mapping for known auth error codes from backend
-        if (resData.code === 1001) {
-          errorMsg = 'Invalid email or password. Please try again.';
+        // Priority 1: Semantic error_code and error_hint from backend
+        if (resData.error_code) {
+          return Promise.reject(new Error(resData.error_hint || resData.error_code));
         }
+        
+        // Priority 2: Fallback to message
+        const errorMsg = resData.message || resData.error || 'Unknown business error';
+        
         return Promise.reject(new Error(errorMsg));
       }
 
@@ -78,8 +81,13 @@ const applyInterceptors = (client: typeof platformApiClient) => {
           }
         }
 
-        if (data && (data.message || data.error)) {
-          return Promise.reject(new Error(data.message || data.error));
+        if (data) {
+          if (data.error_code) {
+            return Promise.reject(new Error(data.error_hint || data.error_code));
+          }
+          if (data.message || data.error) {
+            return Promise.reject(new Error(data.message || data.error));
+          }
         }
       }
 

@@ -24,10 +24,10 @@ export default function LoginPage() {
       const response = await authService.login(email, password);
       login(response);
       
-      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
-    } catch (err: any) {
-      const errMsg = err.message || 'Failed to sign in. Please check your credentials.';
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.';
       showToast(errMsg, 'error');
     } finally {
       setIsLoading(false);

@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({ 
       token, 
-      user, 
+      user: { ...user, access }, 
       activeOrgId: orgId,
       isAuthenticated: true,
       hasMenuAccess: hasAccess,
@@ -100,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const hasAccess = access?.has_menu_access ?? false;
 
       set({ 
-        user: user, 
+        user: { ...user, access }, 
         activeOrgId: activeOrgId,
         isAuthenticated: true,
         hasMenuAccess: hasAccess,
