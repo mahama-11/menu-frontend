@@ -5,6 +5,7 @@ export function useI18n() {
 
   const setLang = (lang: string) => {
     i18n.changeLanguage(lang);
+    localStorage.setItem('menu_lang', lang);
   };
 
   return {

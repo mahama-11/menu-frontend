@@ -87,7 +87,6 @@ Before committing code, you must ensure:
 ## 8. Deployment Boundary
 
 - **Public Gateway**: Domain routing, TLS, and cross-project reverse proxy rules belong to `infra/nginx/`.
-- **Local App Container**: `deploy/menu-nginx.conf` and `deploy/menu-nginx.dev.conf` are app-local static site configs only.
 - **Do Not Mix Layers**: Do not reintroduce `/api`, storage, or monitoring gateway rules back into the app-local frontend container configs.
 - **API Split**:
   - `VITE_PLATFORM_API_BASE_URL` defaults to `/api/platform/v1`

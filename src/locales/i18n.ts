@@ -13,7 +13,7 @@ i18n
       zh: { translation: zh },
       th: { translation: th },
     },
-    lng: 'en', // Default language
+    lng: localStorage.getItem('menu_lang') || 'en', // Default language
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false, // React already safes from xss

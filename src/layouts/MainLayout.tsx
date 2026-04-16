@@ -28,8 +28,20 @@ export default function MainLayout() {
 
   useEffect(() => {
     // Close mobile menu when route changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMobileMenuOpen(false);
-  }, [location.pathname]);
+
+    // Handle hash scrolling if hash is present
+    if (location.hash) {
+      const id = location.hash.replace('#', '');
+      const element = document.getElementById(id);
+      if (element) {
+        setTimeout(() => element.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, location.hash]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -60,11 +72,11 @@ export default function MainLayout() {
               <span className="font-bold text-lg tracking-tight text-white">{t('nav.logo')}</span>
             </Link>
             <nav className="hidden md:flex ml-8 gap-8 text-sm font-medium">
-              <a href="/#features" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.features')}</a>
-              <a href="/#workflow" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.how')}</a>
+              <Link to="/#features" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.features')}</Link>
+              <Link to="/#workflow" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.how')}</Link>
               <Link to="/demo" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.demo')}</Link>
-              <a href="/#pricing" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.pricing')}</a>
-              <a href="/#faq" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.faq')}</a>
+              <Link to="/#pricing" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.pricing')}</Link>
+              <Link to="/#faq" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.faq')}</Link>
             </nav>
           </div>
           
@@ -137,11 +149,11 @@ export default function MainLayout() {
         {isMobileMenuOpen && (
           <div className="md:hidden glass-strong border-t border-white/10">
             <nav className="flex flex-col px-4 py-4 space-y-4">
-              <a href="/#features" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.features')}</a>
-              <a href="/#workflow" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.how')}</a>
-              <Link to="/demo" className="text-base font-medium text-gray-300 hover:text-white">{t('nav.demo')}</Link>
-              <a href="/#pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.pricing')}</a>
-              <a href="/#faq" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.faq')}</a>
+              <Link to="/#features" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.features')}</Link>
+              <Link to="/#workflow" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.how')}</Link>
+              <Link to="/demo" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.demo')}</Link>
+              <Link to="/#pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.pricing')}</Link>
+              <Link to="/#faq" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.faq')}</Link>
               <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
                 {isAuthenticated ? (
                   <Link to="/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="btn-primary px-4 py-3 rounded-xl flex items-center justify-center gap-2 text-base font-semibold">

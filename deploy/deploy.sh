@@ -16,8 +16,8 @@ send_files() {
   OUT_BASE="$(basename "$OUT_FILE")"
   scp -i "$SSH_KEY" "$OUT_FILE" "$REMOTE:$REMOTE_BASE/"
   # Copy config files
-  scp -i "$SSH_KEY" -r deploy/menu-nginx.conf "$REMOTE:$REMOTE_DIR/menu-nginx.conf"
-  scp -i "$SSH_KEY" -r deploy/menu-nginx.dev.conf "$REMOTE:$REMOTE_DIR/menu-nginx.dev.conf"
+  #scp -i "$SSH_KEY" -r deploy/menu-nginx.conf "$REMOTE:$REMOTE_DIR/menu-nginx.conf"
+  #scp -i "$SSH_KEY" -r deploy/menu-nginx.dev.conf "$REMOTE:$REMOTE_DIR/menu-nginx.dev.conf"
   scp -i "$SSH_KEY" -r deploy/docker-compose.yml "$REMOTE:$REMOTE_DIR/docker-compose.yml"
 }
 
