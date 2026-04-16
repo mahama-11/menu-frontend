@@ -38,7 +38,7 @@ export const authService = {
 
   register: async (name: string, restaurant_name: string, email: string, password: string):Promise<AuthResponse> => {
     // Backend expects 'email', 'password', and 'restaurant_name'
-    const response = await menuApiClient.post('/auth/register', { email, password, restaurant_name });
+    const response = await menuApiClient.post('/auth/register', { name, email, password, restaurant_name });
     return response as unknown as AuthResponse;
   },
 

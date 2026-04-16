@@ -1,37 +1,36 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { authService } from '@/services/auth';
 import { useAuthStore } from '@/store/authStore';
-
 import { useToastStore } from '@/store/toastStore';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const login = useAuthStore(state => state.login);
   const { showToast } = useToastStore();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setIsLoading(true);
     
     try {
       // Connects to unified v-backend auth
       const response = await authService.login(email, password);
       login(response);
-      navigate('/dashboard');
+      
+      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
     } catch (err: any) {
       const errMsg = err.message || 'Failed to sign in. Please check your credentials.';
-      setError(errMsg);
       showToast(errMsg, 'error');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -82,10 +81,10 @@ export default function LoginPage() {
 
           <button 
             type="submit" 
-            disabled={loading}
+            disabled={isLoading}
             className="btn-primary w-full flex items-center justify-center py-2.5 px-4 text-white rounded-lg transition-colors font-semibold disabled:opacity-70"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
           </button>
         </form>
 

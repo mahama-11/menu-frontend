@@ -98,7 +98,6 @@ export default function Dashboard() {
     setCredits(newCredits);
 
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const actionName = featNames[feat as keyof typeof featNames]?.[lang as 'th'|'zh'|'en'] || feat;
 
     // Build a fake Activity to push immediately for better UX

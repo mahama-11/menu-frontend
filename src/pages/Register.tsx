@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, Store, Loader2, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User, Store, Loader2, ArrowRight } from 'lucide-react';
 import { authService } from '@/services/auth';
 import { useAuthStore } from '@/store/authStore';
-
 import { useToastStore } from '@/store/toastStore';
 
 export default function RegisterPage() {
@@ -16,13 +15,11 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    
+
     try {
       const response = await authService.register(name, restaurantName, email, password);
       // Wait for a successful registration, then auto-login
@@ -30,7 +27,6 @@ export default function RegisterPage() {
       navigate('/dashboard');
     } catch (err: any) {
       const errMsg = err.message || 'Failed to create account. Please try again.';
-      setError(errMsg);
       showToast(errMsg, 'error');
     } finally {
       setLoading(false);
