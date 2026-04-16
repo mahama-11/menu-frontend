@@ -232,9 +232,12 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
               className="bg-[#121212] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-primary-500"
             >
               <option value="all">All Conversions</option>
+              <option value="tracked">Tracked</option>
               <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-              <option value="failed">Failed</option>
+              <option value="eligible">Eligible</option>
+              <option value="commission_earned">Earned</option>
+              <option value="rejected">Rejected</option>
+              <option value="reversed">Reversed</option>
             </select>
             <select 
               value={commStatus}
@@ -243,8 +246,10 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
             >
               <option value="all">All Commissions</option>
               <option value="pending">Pending</option>
+              <option value="earned">Earned</option>
               <option value="settled">Settled</option>
-              <option value="failed">Failed</option>
+              <option value="rejected">Rejected</option>
+              <option value="reversed">Reversed</option>
             </select>
           </div>
         </div>
@@ -265,9 +270,11 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                       item.type === 'conversion' 
                         ? 'bg-blue-500/20 text-blue-400' 
-                        : item.status === 'settled' 
+                        : ['settled', 'earned'].includes(item.status)
                           ? 'bg-green-500/20 text-green-500' 
-                          : 'bg-yellow-500/20 text-yellow-400'
+                          : ['rejected', 'reversed'].includes(item.status)
+                            ? 'bg-red-500/20 text-red-500'
+                            : 'bg-yellow-500/20 text-yellow-400'
                     }`}>
                       {item.type === 'conversion' ? <Users className="w-4 h-4" /> : <Wallet className="w-4 h-4" />}
                     </div>
@@ -282,9 +289,13 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                         <p className="text-white font-medium text-sm">
                           {item.type === 'conversion' 
                             ? (t('ref.feed.conv') || '🎉 Someone joined using your link') 
-                            : item.status === 'settled' 
+                            : ['settled', 'earned'].includes(item.status)
                               ? (t('ref.feed.comm') || '💰 Commission earned') 
-                              : (t('ref.feed.commPending') || '⏳ Commission pending')
+                              : ['rejected'].includes(item.status)
+                                ? (t('ref.feed.commRejected') || '❌ Commission rejected')
+                                : ['reversed'].includes(item.status)
+                                  ? (t('ref.feed.commReversed') || '↩️ Commission reversed')
+                                  : (t('ref.feed.commPending') || '⏳ Commission pending')
                           }
                         </p>
                         {item.desc && <p className="text-xs text-gray-500 mt-1">{item.desc}</p>}
@@ -294,7 +305,13 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                         </p>
                       </div>
                       
-                      <div className={`text-right ${item.status === 'settled' || item.type === 'conversion' ? 'text-green-400' : 'text-yellow-400'}`}>
+                      <div className={`text-right ${
+                        ['settled', 'earned', 'commission_earned'].includes(item.status) || item.type === 'conversion' 
+                          ? 'text-green-400' 
+                          : ['rejected', 'reversed'].includes(item.status)
+                            ? 'text-red-400 line-through opacity-70'
+                            : 'text-yellow-400'
+                      }`}>
                         <p className="font-bold text-lg">+{item.amount}</p>
                         <p className="text-xs opacity-70 uppercase tracking-wider">{item.currency}</p>
                       </div>
