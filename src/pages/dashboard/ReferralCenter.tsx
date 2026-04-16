@@ -71,10 +71,11 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
   };
 
   const activeCode = overview?.active_codes?.[0]?.code || codes[0]?.code;
+  const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
 
   const handleCopyLink = () => {
     if (activeCode) {
-      navigator.clipboard.writeText(`https://menuth.com/register?ref=${activeCode}`);
+      navigator.clipboard.writeText(`${appUrl}/register?ref=${activeCode}`);
       showToast(t('ref.toast.linkCopied') || 'Link copied to clipboard!', 'success');
     } else if (canManageReferral) {
       handleEnsureCode();
@@ -147,7 +148,7 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
               <input 
                 type="text" 
                 readOnly 
-                value={activeCode ? `https://menuth.com/register?ref=${activeCode}` : t('ref.code.empty')}
+                value={activeCode ? `${appUrl}/register?ref=${activeCode}` : t('ref.code.empty') || 'Generate code to get link'}
                 className="bg-transparent w-full px-3 py-2 text-white outline-none text-sm font-mono"
               />
               <button 

@@ -78,6 +78,16 @@ const applyInterceptors = (client: typeof menuApiClient) => {
           if (!isAuthPage) {
             window.location.href = '/login?expired=1';
           }
+        } else if (status === 403) {
+          // Handle forbidden globally (e.g. show toast or redirect)
+          console.warn('Forbidden: You do not have permission for this action.');
+        } else if (status === 429) {
+          // Handle rate limiting
+          console.warn('Too Many Requests: Please slow down.');
+          return Promise.reject(new Error('Rate limit exceeded. Please try again later.'));
+        } else if (status >= 500) {
+          console.error(`Server error (${status}):`, data);
+          // Don't swallow the error, but we can provide a fallback generic message if data is empty
         }
 
         if (data) {
