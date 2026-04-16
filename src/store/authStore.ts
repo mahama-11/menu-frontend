@@ -64,14 +64,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setOrganization: (orgId: string) => {
     localStorage.setItem('v_menu_org_id', orgId);
     
-    // Re-check entitlements when org switches
+    // We should ideally call the backend to switch org context
+    // For now, we update local state but permissions should be re-fetched
     const { user } = get();
-    let hasAccess = false;
-    const orgsList = user?.orgs || user?.organizations;
-    if (orgsList) {
-      const org = orgsList.find(o => o.id === orgId);
-      hasAccess = org?.entitlements?.includes('menu_ai') ?? true;
-    }
+    const hasAccess = user?.access?.has_menu_access ?? false;
     
     set({ activeOrgId: orgId, hasMenuAccess: hasAccess });
   },

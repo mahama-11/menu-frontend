@@ -82,8 +82,10 @@ export default function Dashboard() {
         if (activitiesRes && activitiesRes.data && activitiesRes.data.activities) {
           setActivityLog(activitiesRes.data.activities);
         }
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err);
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to fetch dashboard data';
+        console.error(errorMsg, err);
+        showToast(errorMsg, 'error');
       }
     };
     fetchDashboardData();
@@ -111,8 +113,10 @@ export default function Dashboard() {
     try {
       const res = await referralService.getOverview();
       if (res && res.data) setReferralOverview(res.data);
-    } catch (err) {
-      console.error('Failed to fetch referral overview:', err);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch referral overview';
+      console.error(errorMsg, err);
+      showToast(errorMsg, 'error');
     } finally {
       setIsReferralLoading(false);
     }
@@ -123,8 +127,10 @@ export default function Dashboard() {
     try {
       const res = await referralService.getCodes();
       if (res && res.data) setReferralCodes(res.data.codes);
-    } catch (err) {
-      console.error('Failed to fetch referral codes:', err);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch referral codes';
+      console.error(errorMsg, err);
+      showToast(errorMsg, 'error');
     } finally {
       setIsReferralLoading(false);
     }
@@ -135,8 +141,10 @@ export default function Dashboard() {
     try {
       const res = await referralService.getConversions();
       if (res && res.data) setReferralConversions(res.data.conversions);
-    } catch (err) {
-      console.error('Failed to fetch conversions:', err);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch conversions';
+      console.error(errorMsg, err);
+      showToast(errorMsg, 'error');
     } finally {
       setIsReferralLoading(false);
     }
@@ -147,8 +155,10 @@ export default function Dashboard() {
     try {
       const res = await referralService.getCommissions();
       if (res && res.data) setReferralCommissions(res.data.commissions);
-    } catch (err) {
-      console.error('Failed to fetch commissions:', err);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch commissions';
+      console.error(errorMsg, err);
+      showToast(errorMsg, 'error');
     } finally {
       setIsReferralLoading(false);
     }
@@ -224,9 +234,10 @@ export default function Dashboard() {
     try {
       await authService.updateProfile(profileName, profileRestaurantName, lang);
       showToast(tDash('dash.settings.save') + ' Success', 'success');
-    } catch (err) {
-      console.error('Failed to update profile:', err);
-      showToast('Failed to update profile', 'error');
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update profile';
+      console.error(errorMsg, err);
+      showToast(errorMsg, 'error');
     } finally {
       setIsUpdatingProfile(false);
     }
