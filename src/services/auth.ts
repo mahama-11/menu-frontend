@@ -36,9 +36,13 @@ export const authService = {
     return response as unknown as AuthResponse;
   },
 
-  register: async (name: string, restaurant_name: string, email: string, password: string):Promise<AuthResponse> => {
-    // Backend expects 'email', 'password', and 'restaurant_name'
-    const response = await menuApiClient.post('/auth/register', { name, email, password, restaurant_name });
+  register: async (name: string, restaurant_name: string, email: string, password: string, referral_code?: string):Promise<AuthResponse> => {
+    // Backend expects 'email', 'password', 'restaurant_name', and optional 'referral_code'
+    const payload: Record<string, string> = { name, email, password, restaurant_name };
+    if (referral_code) {
+      payload.referral_code = referral_code;
+    }
+    const response = await menuApiClient.post('/auth/register', payload);
     return response as unknown as AuthResponse;
   },
 

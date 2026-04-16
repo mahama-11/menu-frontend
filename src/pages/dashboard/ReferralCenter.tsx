@@ -14,26 +14,32 @@ interface ReferralCenterProps {
 export default function ReferralCenter({ canManageReferral }: ReferralCenterProps) {
   const { t } = useI18n();
   const { showToast } = useToastStore();
-  
   const [overview, setOverview] = useState<ReferralOverview | null>(null);
   const [codes, setCodes] = useState<ReferralCode[]>([]);
   const [conversions, setConversions] = useState<ReferralConversion[]>([]);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  
+  const [convStatus, setConvStatus] = useState<string>('all');
+  const [commStatus, setCommStatus] = useState<string>('all');
+
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [convStatus, commStatus]);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      const convParam = convStatus === 'all' ? undefined : convStatus;
+      const commParam = commStatus === 'all' ? undefined : commStatus;
+
       const [overviewRes, codesRes, convRes, commRes] = await Promise.all([
-        referralService.getOverview(),
+        referralService.getOverview(convParam, commParam),
         referralService.getCodes(),
-        referralService.getConversions(),
-        referralService.getCommissions()
+        referralService.getConversions(20, 0, convParam),
+        referralService.getCommissions(20, 0, commParam)
       ]);
       if (overviewRes?.data) setOverview(overviewRes.data);
       if (codesRes?.data) setCodes(codesRes.data.codes);
@@ -48,15 +54,16 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
     }
   };
 
-  const handleGenerateCode = async () => {
+  const handleEnsureCode = async () => {
     if (!overview?.programs?.[0]) return;
     setIsGenerating(true);
     try {
-      await referralService.createCode(overview.programs[0].id);
-      showToast(t('ref.toast.codeCreated') || 'Code created successfully', 'success');
+      await referralService.ensureCode(overview.programs[0].program_code);
+      showToast(t('ref.toast.codeCreated') || 'Code ready successfully', 'success');
       await fetchData(); // refresh all
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to create code';
+      const errorMsg = err instanceof Error ? err.message : 'Failed to ensure referral code';
+      console.error(errorMsg, err);
       showToast(errorMsg, 'error');
     } finally {
       setIsGenerating(false);
@@ -70,7 +77,7 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
       navigator.clipboard.writeText(`https://menuth.com/register?ref=${activeCode}`);
       showToast(t('ref.toast.linkCopied') || 'Link copied to clipboard!', 'success');
     } else if (canManageReferral) {
-      handleGenerateCode();
+      handleEnsureCode();
     }
   };
 
@@ -202,10 +209,36 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
 
       {/* 3. Activity Feed: Dynamic Timeline */}
       <div>
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Zap className="w-5 h-5 text-primary-400" />
-          {t('ref.feed.title') || 'Recent Activity'}
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary-400" />
+            {t('ref.feed.title') || 'Recent Activity'}
+          </h3>
+          
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2 sm:gap-4">
+            <select 
+              value={convStatus}
+              onChange={(e) => setConvStatus(e.target.value)}
+              className="bg-[#121212] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-primary-500"
+            >
+              <option value="all">All Conversions</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
+            <select 
+              value={commStatus}
+              onChange={(e) => setCommStatus(e.target.value)}
+              className="bg-[#121212] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white outline-none focus:border-primary-500"
+            >
+              <option value="all">All Commissions</option>
+              <option value="pending">Pending</option>
+              <option value="settled">Settled</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
         
         <div className="glass rounded-3xl p-6 sm:p-8">
           {feedItems.length === 0 ? (

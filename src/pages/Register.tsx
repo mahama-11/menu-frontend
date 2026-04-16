@@ -1,13 +1,16 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, Store, Loader2, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, Lock, User, Store, Loader2, ArrowRight, Tag, CheckCircle2 } from 'lucide-react';
 import { authService } from '@/services/auth';
+import { referralService } from '@/services/referral';
+import type { ReferralCodeResolve } from '@/types/referral';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
 import { useI18n } from '@/hooks/useI18n';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const login = useAuthStore(state => state.login);
   const { showToast } = useToastStore();
   const { t } = useI18n();
@@ -16,14 +19,59 @@ export default function RegisterPage() {
   const [restaurantName, setRestaurantName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  
+  const [resolvedCode, setResolvedCode] = useState<ReferralCodeResolve | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
+  const [resolveError, setResolveError] = useState('');
+  
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) {
+      setReferralCode(ref);
+      handleResolveCode(ref);
+    }
+  }, [searchParams]);
+
+  const handleResolveCode = async (code: string) => {
+    if (!code) {
+      setResolvedCode(null);
+      setResolveError('');
+      return;
+    }
+    
+    setIsResolving(true);
+    setResolveError('');
+    try {
+      const res = await referralService.resolveCode(code);
+      if (res && res.data) {
+        setResolvedCode(res.data);
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Invalid referral code';
+      setResolveError(errorMsg);
+      setResolvedCode(null);
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase();
+    setReferralCode(val);
+    setResolvedCode(null);
+    setResolveError('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const response = await authService.register(name, restaurantName, email, password);
+      const finalCode = resolvedCode ? referralCode : undefined;
+      const response = await authService.register(name, restaurantName, email, password, finalCode);
       // Wait for a successful registration, then auto-login
      login(response);
       navigate('/dashboard', { replace: true });
@@ -118,6 +166,35 @@ export default function RegisterPage() {
                   minLength={8}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Invite Code (Optional)</label>
+              <div className="relative">
+                <Tag className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                <input 
+                  type="text" 
+                  value={referralCode}
+                  onChange={handleCodeChange}
+                  onBlur={() => handleResolveCode(referralCode)}
+                  className={`w-full pl-10 pr-10 py-3 border rounded-xl bg-white/5 text-white placeholder:text-gray-600 focus:outline-none transition-all uppercase ${
+                    resolvedCode ? 'border-green-500/50 focus:border-green-500 focus:bg-white/10' :
+                    resolveError ? 'border-red-500/50 focus:border-red-500 focus:bg-white/10' :
+                    'border-white/10 focus:border-primary-500 focus:bg-white/10'
+                  }`}
+                  placeholder="GOT A CODE?"
+                />
+                {isResolving && <Loader2 className="absolute right-3 top-3 h-5 w-5 text-primary-500 animate-spin" />}
+                {resolvedCode && !isResolving && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500" />}
+              </div>
+              {resolvedCode && (
+                <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
+                  Valid code from <strong>{resolvedCode.promoter_name || 'Partner'}</strong>
+                </p>
+              )}
+              {resolveError && (
+                <p className="text-xs text-red-400 mt-1">{resolveError}</p>
+              )}
             </div>
 
             <button 

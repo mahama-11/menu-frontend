@@ -52,6 +52,15 @@ export interface Commission {
   description?: string;
 }
 
+export interface ReferralCodeResolve {
+  code: string;
+  program_id: string;
+  program_name: string;
+  trigger_type: string;
+  promoter_name?: string;
+  promoter_id?: string;
+}
+
 export interface ReferralOverview {
   total_conversions: number;
   total_commissions_earned: number;
