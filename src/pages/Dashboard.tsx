@@ -10,7 +10,7 @@ import type { ReferralOverview, ReferralCode, ReferralConversion, Commission } f
 import { useToastStore } from '@/store/toastStore';
 import { 
   History, 
-  Plus, Wallet, Users, Tag, Copy, Loader2
+  Plus, Wallet, Users, Tag, Copy, Loader2, Gift, Share2
 } from 'lucide-react';
 
 type Section = 'home' | 'create' | 'history' | 'referral' | 'settings';
@@ -18,7 +18,7 @@ type Section = 'home' | 'create' | 'history' | 'referral' | 'settings';
 export default function Dashboard() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const { lang, setLang } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const { showToast } = useToastStore();
   const [activeSection, setActiveSection] = useState<Section>('home');
 
@@ -171,7 +171,7 @@ export default function Dashboard() {
     try {
       const programId = referralOverview.programs[0].id;
       await referralService.createCode(programId);
-      showToast('Referral code created successfully!', 'success');
+      showToast(t('ref.toast.codeCreated'), 'success');
       if (referralTab === 'overview') fetchReferralOverview();
       else if (referralTab === 'codes') fetchReferralCodes();
     } catch (err: unknown) {
@@ -184,7 +184,7 @@ export default function Dashboard() {
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
-    showToast('Code copied to clipboard!', 'success');
+    showToast(t('ref.toast.codeCopied'), 'success');
   };
 
   const handleLogout = () => {
@@ -353,7 +353,7 @@ export default function Dashboard() {
           {hasReferralAccess && (
             <button onClick={() => setActiveSection('referral')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 ${activeSection === 'referral' ? 'text-white bg-primary-500/15 border border-primary-500/30' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
               <Users width="16" height="16" className="text-current" />
-              <span>Referral Program</span>
+              <span>{t('ref.title')}</span>
             </button>
           )}
           <button onClick={() => setActiveSection('settings')} className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-3 ${activeSection === 'settings' ? 'text-white bg-primary-500/15 border border-primary-500/30' : 'text-white/50 hover:text-white hover:bg-white/5'}`}>
@@ -598,8 +598,8 @@ export default function Dashboard() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
               <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
-                  <h2 className="text-3xl font-bold text-white mb-2">Referral Program</h2>
-                  <p className="text-gray-400">Invite other restaurants and earn commissions on their spending.</p>
+                  <h2 className="text-3xl font-bold text-white mb-2">{t('ref.title')}</h2>
+                  <p className="text-gray-400">{t('ref.subtitle')}</p>
                 </div>
                 {canManageReferral && referralTab === 'codes' && (
                   <button 
@@ -608,7 +608,7 @@ export default function Dashboard() {
                     className="btn-primary py-2 px-4 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50"
                   >
                     {isGeneratingCode ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    Generate Invite Code
+                    {t('ref.link.generate')}
                   </button>
                 )}
               </div>
@@ -616,10 +616,10 @@ export default function Dashboard() {
               {/* Sub-navigation */}
               <div className="flex overflow-x-auto no-scrollbar gap-2 mb-6 border-b border-white/10 pb-2">
                 {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'codes', label: 'My Codes' },
-                  { id: 'conversions', label: 'My Conversions' },
-                  { id: 'commissions', label: 'My Commissions' },
+                  { id: 'overview', label: t('ref.tab.overview') },
+                  { id: 'codes', label: t('ref.tab.codes') },
+                  { id: 'conversions', label: t('ref.tab.conversions') },
+                  { id: 'commissions', label: t('ref.tab.commissions') },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -644,13 +644,50 @@ export default function Dashboard() {
                   {/* OVERVIEW TAB */}
                   {referralTab === 'overview' && referralOverview && (
                     <div className="space-y-6 animate-in fade-in">
+                      
+                      {/* Invite Friends Banner (SaaS Style) */}
+                      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary-600 to-purple-600 p-6 sm:p-8">
+                        <div className="absolute -right-10 -top-10 opacity-20">
+                          <Gift className="w-48 h-48" />
+                        </div>
+                        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                          <div className="max-w-lg">
+                            <h3 className="text-2xl font-bold text-white mb-2">{t('ref.banner.title')}</h3>
+                            <p className="text-white/80">{t('ref.banner.desc')}</p>
+                          </div>
+                          
+                          {/* Copy Link Input */}
+                          <div className="w-full md:w-auto flex-1 max-w-sm">
+                            <label className="block text-xs font-semibold text-white/70 mb-2 uppercase tracking-wider">{t('ref.link.label')}</label>
+                            <div className="flex bg-black/30 rounded-xl p-1 backdrop-blur-sm border border-white/10">
+                              <input 
+                                type="text" 
+                                readOnly 
+                                value={`https://menuth.com/register?ref=${referralOverview.active_codes?.[0]?.code || 'CODE'}`}
+                                className="bg-transparent w-full px-3 text-white outline-none text-sm"
+                              />
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`https://menuth.com/register?ref=${referralOverview.active_codes?.[0]?.code || 'CODE'}`);
+                                  showToast(t('ref.toast.linkCopied'), 'success');
+                                }}
+                                className="whitespace-nowrap bg-white/20 hover:bg-white/30 transition-colors text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                              >
+                                <Share2 className="w-4 h-4" />
+                                {t('ref.link.copy')}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Stats Row */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="glass rounded-2xl p-6 relative overflow-hidden">
                           <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Users className="w-12 h-12" />
                           </div>
-                          <p className="text-sm text-gray-400 font-medium mb-1">Total Conversions</p>
+                          <p className="text-sm text-gray-400 font-medium mb-1">{t('ref.stat.conversions')}</p>
                           <p className="text-3xl font-bold text-white">{referralOverview.total_conversions}</p>
                         </div>
                         
@@ -658,7 +695,7 @@ export default function Dashboard() {
                           <div className="absolute top-0 right-0 p-4 opacity-10">
                             <Wallet className="w-12 h-12 text-primary-500" />
                           </div>
-                          <p className="text-sm text-gray-400 font-medium mb-1">Earned Commissions</p>
+                          <p className="text-sm text-gray-400 font-medium mb-1">{t('ref.stat.earned')}</p>
                           <div className="flex items-baseline gap-1">
                             <p className="text-3xl font-bold text-primary-400">{referralOverview.total_commissions_earned}</p>
                             <p className="text-sm text-primary-500/50 mb-1">{referralOverview.currency}</p>
@@ -669,7 +706,7 @@ export default function Dashboard() {
                           <div className="absolute top-0 right-0 p-4 opacity-10">
                             <History className="w-12 h-12" />
                           </div>
-                          <p className="text-sm text-gray-400 font-medium mb-1">Pending Settlements</p>
+                          <p className="text-sm text-gray-400 font-medium mb-1">{t('ref.stat.pending')}</p>
                           <div className="flex items-baseline gap-1">
                             <p className="text-3xl font-bold text-white">{referralOverview.total_commissions_pending}</p>
                             <p className="text-sm text-gray-500 mb-1">{referralOverview.currency}</p>
@@ -683,9 +720,9 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-white flex items-center gap-2">
                               <Tag className="w-5 h-5 text-primary-400" />
-                              Active Invite Codes
+                              {t('ref.code.active')}
                             </h3>
-                            <button onClick={() => setReferralTab('codes')} className="text-xs text-primary-400 hover:underline">View All</button>
+                            <button onClick={() => setReferralTab('codes')} className="text-xs text-primary-400 hover:underline">{t('ref.code.viewAll')}</button>
                           </div>
                           
                           <div className="space-y-3">
@@ -694,7 +731,7 @@ export default function Dashboard() {
                                 <div key={code.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between group hover:bg-white/10 transition-colors">
                                   <div>
                                     <p className="text-xl font-mono font-bold tracking-wider text-white mb-1">{code.code}</p>
-                                    <p className="text-xs text-gray-500">Created {new Date(code.created_at).toLocaleDateString()}</p>
+                                    <p className="text-xs text-gray-500">{t('ref.code.created')} {new Date(code.created_at).toLocaleDateString()}</p>
                                   </div>
                                   <button 
                                     onClick={() => handleCopyCode(code.code)}
@@ -706,9 +743,9 @@ export default function Dashboard() {
                               ))
                             ) : (
                               <div className="text-center py-8 text-gray-500 border border-dashed border-white/10 rounded-xl">
-                                <p className="text-sm">No active referral codes yet.</p>
+                                <p className="text-sm">{t('ref.code.empty')}</p>
                                 {canManageReferral && (
-                                  <button onClick={() => setReferralTab('codes')} className="text-primary-400 hover:underline text-sm mt-2">Generate your first code</button>
+                                  <button onClick={() => setReferralTab('codes')} className="text-primary-400 hover:underline text-sm mt-2">{t('ref.code.generateFirst')}</button>
                                 )}
                               </div>
                             )}
@@ -720,9 +757,9 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between mb-6">
                             <h3 className="text-lg font-bold text-white flex items-center gap-2">
                               <History className="w-5 h-5 text-primary-400" />
-                              Recent Conversions
+                              {t('ref.conv.recent')}
                             </h3>
-                            <button onClick={() => setReferralTab('conversions')} className="text-xs text-primary-400 hover:underline">View All</button>
+                            <button onClick={() => setReferralTab('conversions')} className="text-xs text-primary-400 hover:underline">{t('ref.code.viewAll')}</button>
                           </div>
                           
                           <div className="space-y-4">
@@ -732,7 +769,7 @@ export default function Dashboard() {
                                   <div className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary-500"></div>
                                   <div className="flex justify-between items-start">
                                     <div>
-                                      <p className="text-sm font-medium text-white">New {conv.trigger_type.replace('_', ' ')} Sign-up</p>
+                                      <p className="text-sm font-medium text-white">{t('ref.conv.new').replace('{type}', conv.trigger_type.replace('_', ' '))}</p>
                                       <p className="text-xs text-gray-500 mt-0.5">{new Date(conv.created_at).toLocaleDateString()}</p>
                                     </div>
                                     <span className="text-sm font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</span>
@@ -741,7 +778,7 @@ export default function Dashboard() {
                               ))
                             ) : (
                               <div className="text-center py-8 text-gray-500">
-                                <p className="text-sm">No conversions recorded yet.</p>
+                                <p className="text-sm">{t('ref.conv.empty')}</p>
                               </div>
                             )}
                           </div>
@@ -762,26 +799,26 @@ export default function Dashboard() {
                               <div>
                                 <p className="text-2xl font-mono font-bold tracking-widest text-white mb-1">{code.code}</p>
                                 <div className="flex items-center gap-3 text-xs text-gray-500">
-                                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300 capitalize">{code.status}</span>
-                                  <span>Created: {new Date(code.created_at).toLocaleDateString()}</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300 capitalize">{code.status === 'active' ? t('ref.status.completed') : code.status}</span>
+                                  <span>{t('ref.code.created')}: {new Date(code.created_at).toLocaleDateString()}</span>
                                 </div>
                               </div>
                               <button 
                                 onClick={() => handleCopyCode(code.code)}
                                 className="px-4 py-2 rounded-lg bg-white/5 text-gray-300 hover:text-primary-400 hover:bg-primary-500/20 transition-all flex items-center gap-2"
                               >
-                                <Copy className="w-4 h-4" /> Copy Code
+                                <Copy className="w-4 h-4" /> {t('ref.link.copy')}
                               </button>
                             </div>
                           ))
                         ) : (
                           <div className="text-center py-16 text-gray-500 border border-dashed border-white/10 rounded-xl">
                             <Tag className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                            <p className="text-lg text-white mb-1">No invite codes yet</p>
-                            <p className="text-sm mb-4">Generate an invite code to start earning commissions.</p>
+                            <p className="text-lg text-white mb-1">{t('ref.empty.codes')}</p>
+                            <p className="text-sm mb-4">{t('ref.empty.codesDesc')}</p>
                             {canManageReferral && (
                               <button onClick={handleGenerateCode} className="btn-primary py-2 px-4 rounded-lg text-sm font-bold inline-flex items-center gap-2">
-                                <Plus className="w-4 h-4" /> Generate Code
+                                <Plus className="w-4 h-4" /> {t('ref.link.generate')}
                               </button>
                             )}
                           </div>
@@ -797,10 +834,10 @@ export default function Dashboard() {
                         <table className="w-full text-left text-sm">
                           <thead>
                             <tr className="border-b border-white/10 text-gray-400">
-                              <th className="pb-3 font-medium">Date</th>
-                              <th className="pb-3 font-medium">Type</th>
-                              <th className="pb-3 font-medium">Status</th>
-                              <th className="pb-3 font-medium text-right">Commission</th>
+                              <th className="pb-3 font-medium">{t('ref.table.date')}</th>
+                              <th className="pb-3 font-medium">{t('ref.table.type')}</th>
+                              <th className="pb-3 font-medium">{t('ref.table.status')}</th>
+                              <th className="pb-3 font-medium text-right">{t('ref.table.commission')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
@@ -813,7 +850,7 @@ export default function Dashboard() {
                                   <td className="py-4 text-white capitalize">{conv.trigger_type.replace('_', ' ')}</td>
                                   <td className="py-4">
                                     <span className={`px-2 py-1 rounded-full text-xs ${conv.status === 'completed' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                                      {conv.status}
+                                      {conv.status === 'completed' ? t('ref.status.completed') : t('ref.status.pending')}
                                     </span>
                                   </td>
                                   <td className="py-4 text-right font-bold text-green-400">+{conv.commission_amount} {conv.commission_currency}</td>
@@ -823,7 +860,7 @@ export default function Dashboard() {
                               <tr>
                                 <td colSpan={4} className="py-16 text-center text-gray-500">
                                   <History className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                  <p>No conversions found.</p>
+                                  <p>{t('ref.empty.conversions')}</p>
                                 </td>
                               </tr>
                             )}
@@ -840,10 +877,10 @@ export default function Dashboard() {
                         <table className="w-full text-left text-sm">
                           <thead>
                             <tr className="border-b border-white/10 text-gray-400">
-                              <th className="pb-3 font-medium">Date</th>
-                              <th className="pb-3 font-medium">Description</th>
-                              <th className="pb-3 font-medium">Status</th>
-                              <th className="pb-3 font-medium text-right">Amount</th>
+                              <th className="pb-3 font-medium">{t('ref.table.date')}</th>
+                              <th className="pb-3 font-medium">{t('ref.table.desc')}</th>
+                              <th className="pb-3 font-medium">{t('ref.table.status')}</th>
+                              <th className="pb-3 font-medium text-right">{t('ref.table.amount')}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
@@ -853,10 +890,10 @@ export default function Dashboard() {
                               referralCommissions.map(comm => (
                                 <tr key={comm.id} className="hover:bg-white/5 transition-colors">
                                   <td className="py-4 text-gray-300">{new Date(comm.created_at).toLocaleDateString()}</td>
-                                  <td className="py-4 text-white">{comm.description || 'Referral Commission'}</td>
+                                  <td className="py-4 text-white">{comm.description || t('ref.table.descDefault')}</td>
                                   <td className="py-4">
                                     <span className={`px-2 py-1 rounded-full text-xs ${comm.status === 'settled' ? 'bg-blue-500/20 text-blue-400' : 'bg-gray-500/20 text-gray-400'}`}>
-                                      {comm.status}
+                                      {comm.status === 'settled' ? t('ref.status.settled') : t('ref.status.pending')}
                                     </span>
                                   </td>
                                   <td className="py-4 text-right font-bold text-white">{comm.amount} {comm.currency}</td>
@@ -866,7 +903,7 @@ export default function Dashboard() {
                               <tr>
                                 <td colSpan={4} className="py-16 text-center text-gray-500">
                                   <Wallet className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                  <p>No commissions found.</p>
+                                  <p>{t('ref.empty.commissions')}</p>
                                 </td>
                               </tr>
                             )}
