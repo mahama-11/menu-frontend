@@ -1,4 +1,4 @@
-import { menuApiClient, platformApiClient } from './api';
+import { menuApiClient } from './api';
 import type { User, AuthResponse, CreditsSummary, AccessContext } from '@/types/auth';
 
 export interface SessionResponse {
@@ -65,10 +65,5 @@ export const authService = {
   getActivities: async (limit: number = 20, offset: number = 0):Promise<{ data: ActivitiesResponse }> => {
     const response = await menuApiClient.get(`/user/activities?limit=${limit}&offset=${offset}`);
     return response as unknown as { data: ActivitiesResponse };
-  },
-
-  switchOrganization: async (orgId: string):Promise<{ access_token?: string; current_org_id?: string; permissions?: string[]; org_role?: string }> => {
-    const response = await platformApiClient.post('/orgs/switch', { organization_id: orgId });
-    return response as unknown as { access_token?: string; current_org_id?: string; permissions?: string[]; org_role?: string };
   }
 };

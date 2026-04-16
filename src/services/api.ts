@@ -2,7 +2,6 @@ import axios, { AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import type { APIResponse } from '@/types/auth';
 
-const PLATFORM_API_BASE_URL = import.meta.env.VITE_PLATFORM_API_BASE_URL || '/api/v1/platform';
 const MENU_API_BASE_URL = import.meta.env.VITE_MENU_API_BASE_URL || '/api/v1/menu';
 
 const createClient = (baseURL: string) =>
@@ -14,7 +13,6 @@ const createClient = (baseURL: string) =>
     },
   });
 
-export const platformApiClient = createClient(PLATFORM_API_BASE_URL);
 export const menuApiClient = createClient(MENU_API_BASE_URL);
 export const apiClient = menuApiClient;
 
@@ -22,7 +20,7 @@ export const apiClient = menuApiClient;
 const getToken = () => localStorage.getItem('v_menu_token');
 const getOrgId = () => localStorage.getItem('v_menu_org_id');
 
-const applyInterceptors = (client: typeof platformApiClient) => {
+const applyInterceptors = (client: typeof menuApiClient) => {
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
       const token = getToken();
@@ -42,7 +40,8 @@ const applyInterceptors = (client: typeof platformApiClient) => {
   );
 
   client.interceptors.response.use(
-    (response: AxiosResponse<APIResponse>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (response: AxiosResponse<APIResponse>): any => {
       const resData = response.data;
 
       if (resData && (resData.code === 0 || resData.code === 200)) {
@@ -96,7 +95,6 @@ const applyInterceptors = (client: typeof platformApiClient) => {
   );
 };
 
-applyInterceptors(platformApiClient);
 applyInterceptors(menuApiClient);
 
 export default apiClient;
