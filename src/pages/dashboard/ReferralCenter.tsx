@@ -4,7 +4,7 @@ import { referralService } from '@/services/referral';
 import type { ReferralOverview, ReferralCode, ReferralConversion, Commission } from '@/types/referral';
 import { useToastStore } from '@/store/toastStore';
 import { 
-  Copy, Loader2, Gift, Share2, Users, Wallet, Clock, TrendingUp, Zap, Award
+  Copy, Loader2, Gift, Share2, Users, Wallet, Clock, TrendingUp, Zap, Award, Tag
 } from 'lucide-react';
 
 interface ReferralCenterProps {
@@ -79,6 +79,11 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
     } else if (canManageReferral) {
       handleEnsureCode();
     }
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    showToast(t('ref.toast.codeCopied') || 'Code copied to clipboard!', 'success');
   };
 
   const feedItems = useMemo(() => {
@@ -207,9 +212,12 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
         </div>
       </div>
 
-      {/* 3. Activity Feed: Dynamic Timeline */}
-      <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+      {/* 3. Bottom Content: Activity Feed & My Codes */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Left Column: Activity Feed */}
+        <div className="lg:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
             <Zap className="w-5 h-5 text-primary-400" />
             {t('ref.feed.title') || 'Recent Activity'}
@@ -296,6 +304,58 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
             </div>
           )}
         </div>
+        
+        {/* Right Column: My Codes */}
+        <div className="lg:col-span-1">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Tag className="w-5 h-5 text-primary-400" />
+              {t('ref.tab.codes') || 'My Codes'}
+            </h3>
+          </div>
+          
+          <div className="space-y-3">
+            {codes.length === 0 ? (
+              <div className="glass rounded-3xl p-8 text-center border border-dashed border-white/10">
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+                  <Tag className="w-5 h-5 text-gray-500" />
+                </div>
+                <p className="text-white font-medium mb-1">{t('ref.empty.codes') || 'No invite codes yet'}</p>
+                <p className="text-gray-400 text-sm mb-4">{t('ref.empty.codesDesc') || 'Generate an invite code to start earning commissions.'}</p>
+                {canManageReferral && (
+                  <button 
+                    onClick={handleEnsureCode}
+                    disabled={isGenerating}
+                    className="btn-primary px-4 py-2 text-sm rounded-lg font-bold inline-flex items-center justify-center w-full"
+                  >
+                    {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('ref.link.generate')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              codes.map(code => (
+                <div key={code.id} className="glass rounded-2xl p-5 border border-white/5 hover:border-primary-500/30 transition-colors group">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xl font-mono font-bold tracking-widest text-white">{code.code}</p>
+                    <button 
+                      onClick={() => handleCopyCode(code.code)}
+                      className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-white group-hover:bg-primary-500/20 transition-all"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={`px-2 py-0.5 rounded-full ${code.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'} capitalize`}>
+                      {code.status}
+                    </span>
+                    <span className="text-gray-500">{new Date(code.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))
+            )}</div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
