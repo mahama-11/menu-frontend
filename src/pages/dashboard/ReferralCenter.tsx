@@ -342,7 +342,16 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
               <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
                 <Clock className="w-6 h-6 text-gray-500" />
               </div>
-              <p className="text-gray-400 text-sm">{t('ref.feed.empty') || "No activity yet. Share your link to get started!"}</p>
+              <p className="text-gray-400 text-sm mb-4">{t('ref.feed.empty') || "No activity yet. Share your link to get started!"}</p>
+              {activeCode && (
+                <button 
+                  onClick={handleCopyLink}
+                  className="btn-outline px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  {t('ref.link.copy') || 'Copy Link'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-6">
