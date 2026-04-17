@@ -36,9 +36,26 @@ export interface AccessContext {
   platform_permissions?: string[];
 }
 
+export interface WalletSummary {
+  asset_code: string;
+  total_balance: number;
+  permanent_balance: number;
+  reward_balance: number;
+  allowance_balance: number;
+  assets: {
+    asset_id: string;
+    bucket_type: string;
+    amount: number;
+    expires_at?: string;
+  }[];
+}
+
 export interface CreditsSummary {
   asset_code: string;
-  balance: number;
+  balance: number; // For backward compatibility, represents total usable balance
+  permanent_balance?: number;
+  reward_balance?: number;
+  allowance_balance?: number;
   rewarded: number;
   reward_granted: boolean;
   max_credits: number | null;

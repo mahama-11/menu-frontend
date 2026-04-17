@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { User, AuthResponse } from '@/types/auth';
+import type { User, AuthResponse, WalletSummary } from '@/types/auth';
 import { authService } from '@/services/auth';
 
 interface AuthState {
   user: User | null;
   token: string | null;
   activeOrgId: string | null;
+  walletSummaries: WalletSummary[] | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   hasMenuAccess: boolean;
@@ -15,12 +16,14 @@ interface AuthState {
   logout: () => void;
   setOrganization: (orgId: string) => void;
   fetchUser: () => Promise<void>;
+  fetchWalletSummaries: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   token: localStorage.getItem('v_menu_token'),
   activeOrgId: localStorage.getItem('v_menu_org_id'),
+  walletSummaries: null,
   isLoading: true, // Initially true while we check token
   isAuthenticated: !!localStorage.getItem('v_menu_token'),
   hasMenuAccess: false,
@@ -111,6 +114,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         hasMenuAccess: false,
         isLoading: false 
       });
+    }
+  },
+
+  fetchWalletSummaries: async () => {
+    try {
+      const response = await authService.getWalletSummary();
+      set({ walletSummaries: response.data.summaries });
+    } catch (error) {
+      console.error('Failed to fetch wallet summaries:', error);
     }
   }
 }));

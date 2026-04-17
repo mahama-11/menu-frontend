@@ -51,9 +51,14 @@ export const authService = {
     return response as unknown as SessionResponse;
   },
 
-  getCredits: async ():Promise<{ balance: number; max_credits?: number; plan_name?: string; reset_date?: string }> => {
+  getCredits: async ():Promise<{ balance: number; permanent_balance?: number; reward_balance?: number; allowance_balance?: number; max_credits?: number; plan_name?: string; reset_date?: string }> => {
     const response = await menuApiClient.get('/user/credits');
-    return response as unknown as { balance: number; max_credits?: number; plan_name?: string; reset_date?: string };
+    return response as unknown as { balance: number; permanent_balance?: number; reward_balance?: number; allowance_balance?: number; max_credits?: number; plan_name?: string; reset_date?: string };
+  },
+
+  getWalletSummary: async ():Promise<{ data: { summaries: import('@/types/auth').WalletSummary[] } }> => {
+    const response = await menuApiClient.get('/user/wallet-summary');
+    return response as unknown as { data: { summaries: import('@/types/auth').WalletSummary[] } };
   },
 
   getProfile: async ():Promise<{ data: ProfileResponse }> => {

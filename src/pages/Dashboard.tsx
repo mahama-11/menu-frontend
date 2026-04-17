@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [maxCredits, setMaxCredits] = useState(20);
   const [plan, setPlan] = useState('Basic');
   const [resetDate, setResetDate] = useState('');
+  
+  const { walletSummaries, fetchWalletSummaries } = useAuthStore();
   const creditPercent = Math.min(100, Math.max(0, (credits / maxCredits) * 100));
 
   // Profile data
@@ -50,7 +52,8 @@ export default function Dashboard() {
         const [creditsRes, profileRes, activitiesRes] = await Promise.all([
           authService.getCredits(),
           authService.getProfile(),
-          authService.getActivities(20, 0)
+          authService.getActivities(20, 0),
+          fetchWalletSummaries()
         ]);
 
         if (creditsRes) {
@@ -225,7 +228,11 @@ export default function Dashboard() {
           <span className="font-bold text-sm">AI Menu Engine</span>
         </Link>
 
-        <div className="glass rounded-xl p-4 mb-6">
+        <div className="glass rounded-xl p-4 mb-6 relative group border border-white/5 hover:border-primary-500/30 transition-all cursor-pointer" title={
+          walletSummaries 
+            ? walletSummaries.map(s => `${s.asset_code}: ${s.total_balance}`).join('\n') 
+            : 'Total usable balance'
+        }>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-gray-400">{tDash('dash.credits')}</span>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-green-400/10 text-green-400">{plan}</span>
@@ -319,7 +326,16 @@ export default function Dashboard() {
                   <div>
                     <p className="text-sm text-gray-400 mb-1">{tDash('dash.creditOverview')}</p>
                     <div className="flex items-end gap-2">
-                      <span className="text-4xl font-black gradient-text">{credits}</span>
+                      <span 
+                        className="text-4xl font-black gradient-text cursor-pointer relative" 
+                        title={
+                          walletSummaries 
+                            ? walletSummaries.map(s => `${s.asset_code}: ${s.total_balance}`).join('\n') 
+                            : 'Total usable balance'
+                        }
+                      >
+                        {credits}
+                      </span>
                       <span className="text-gray-500 mb-1">/ {maxCredits} <span>{tDash('dash.cr')}</span></span>
                     </div>
                   </div>
