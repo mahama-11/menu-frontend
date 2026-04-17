@@ -38,11 +38,13 @@ v-menu-frontend/
 Unlike `v-frontend` which uses a CDN runtime, `v-menu-frontend` uses the modern **Tailwind v4 build pipeline**.
 
 ### 3.1 CSS Variables & Theming
+
 - Do not use `tailwind.config.js`. All theme customizations (colors, animations) must be defined in `src/index.css` using the `@theme` directive.
 - **Semantic Colors**: Use `bg-primary-500` instead of hex codes. The primary color is mapped to orange (`#f97316`).
 - **Dark Mode Default**: The app is inherently dark (`#060608` background). You do not need to prefix everything with `dark:`, but you must ensure contrast ratios are respected.
 
 ### 3.2 Utility Classes
+
 - Complex, reusable visual effects (like the Glassmorphism panels or floating animations) are abstracted into custom utility classes in `index.css`:
   - `.glass`: Standard semi-transparent panel with a subtle border.
   - `.glass-strong`: Darker, more opaque panel for high-contrast areas (like headers).
@@ -54,16 +56,20 @@ Unlike `v-frontend` which uses a CDN runtime, `v-menu-frontend` uses the modern 
 Do not use React Context for complex global state. We use **Zustand** for its simplicity and performance.
 
 ### 4.1 Auth Store (`src/store/authStore.ts`)
-- Responsible for holding the `User` object, JWT `token`, and `activeOrgId`.
+
+- Responsible for holding the `User` object, JWT `token`, `activeOrgId`, and `walletSummaries` (multi-asset balances).
 - **Entitlement Checks**: The store automatically computes `hasMenuAccess` by checking if the user's active organization has the `menu_ai` entitlement.
 - **Persistence**: Tokens and active orgs are synced to `localStorage`.
+- **Loading State**: The app root correctly mounts and uses `fetchUser()` and `fetchWalletSummaries()` to restore session state silently before rendering the main protected routes to prevent infinite loading spinners.
 
 ## 5. API & Error Handling (`src/services/api.ts`)
 
-- **Never use raw `fetch`**. Always use the exported `apiClient` from `src/services/api.ts`.
-- **Interceptors**:
+- **Never use raw `fetch`**. Always use the exported `apiClient` or `menuApiClient` from `src/services/api.ts`.
+- **Interceptors & Semantic Error Handling**:
   - Automatically injects the Bearer token.
   - Intercepts `401 Unauthorized` and clears the Zustand store before redirecting to `/login`.
+  - **Global 403 & 429 Handling**: Automatically intercepts forbidden and rate-limited requests to prevent UI crashes.
+  - **Semantic Error Translation**: When the backend returns a specific `error_code` (e.g., `REFERRAL_ALREADY_CLAIMED`), the interceptor automatically maps it to a localized string via `i18n.t('err.ERROR_CODE')`. This allows frontend UI components to simply `catch(err)` and `showToast(err.message)` without writing any custom error mapping logic.
   - **Data Unwrapping**: The interceptor handles the Go backend's standard response format (`{ code, data, message }`). It treats both `code: 0` and `code: 200` as success and returns the inner `data`.
 - **Shared Auth Boundary**:
   - Current auth calls point at shared backend endpoints such as `/auth/login`, `/auth/register`, `/auth/me`, and `/orgs/switch`.
@@ -80,6 +86,7 @@ Do not use React Context for complex global state. We use **Zustand** for its si
 ## 7. Quality Gates (DoD)
 
 Before committing code, you must ensure:
+
 1. **Lint**: Run `npm run lint` and fix any actionable issues.
 2. **Build Success**: Run `npm run build`. The current build already includes TypeScript compilation via `tsc -b` before Vite bundling.
 3. **Accessibility (a11y)**: Ensure all interactive elements (`button`, `a`) have visible focus states (e.g., `focus:ring-2 focus:ring-primary-500`). Do not use `div` for clickable actions.

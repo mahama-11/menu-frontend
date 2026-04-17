@@ -50,10 +50,17 @@ The target market for this MVP is Thailand, meaning tri-lingual support (Thai, E
 - **Key Alignment**: The dictionary structure in `src/locales/` must be flat and semantic (e.g., `dash.action.generate`, `hero.title`).
 - **Layout Robustness**: Thai and English strings are often much longer than their Chinese counterparts. All UI components (buttons, cards) must use flexible widths (`w-full`, `max-w-*`) and avoid hardcoded pixel dimensions to prevent text overflow.
 
-## 6. Accessibility (a11y) Standards
+## 7. Commercial & Referral UI/UX Standards
 
-We do not sacrifice accessibility for the sake of aesthetics.
+As a commercialized SaaS product, V-Menu enforces strict UX patterns for revenue-generating and growth features (like the Referral Program and Credits system):
 
-- **Semantic HTML**: Interactive elements must be `<button>` or `<a>`. Do not use `<div>` with an `onClick` handler unless it also receives a `role="button"` and `tabIndex={0}`.
-- **Focus Outlines**: The default browser focus ring is often hidden by our custom styles. You must explicitly provide a focus state, typically using `focus:outline-none focus:ring-2 focus:ring-primary-500`.
-- **Contrast**: Ensure text on top of glass panels or glow orbs remains legible.
+### 7.1 Asset Transparency & Anti-Misleading
+- **Multi-Asset Display**: Users hold different types of assets (Permanent Credits, Promo Credits, Monthly Allowances). The UI must never aggregate these into a single confusing number without explanation. Use tooltips (Hover) or explicit breakdowns to show the composition of their `balance`.
+- **Referral Redemption**: When users earn commissions, they redeem them for **Reward Assets (Credits)**, not cash payouts. The UI copywriting (e.g., "Redeemed") must explicitly state "Redeemed to reward assets" to prevent users from thinking they can withdraw cash.
+- **Rule Transparency**: Referral rules (delay days, repeat eligibility, specific reward conditions) returned by the `resolve` API must be clearly displayed on both the Register page (for the invitee) and the Referral Center (for the inviter).
+
+### 7.2 Fool-proofing & State Consistency (防呆设计)
+- **Action Locking (Loading States)**: Any action that mutates state or costs assets (Generate Code, Redeem Commission, AI Generation, Login/Register) MUST lock the UI. The button must enter a `disabled` state with a loading spinner to prevent double-submissions or network race conditions.
+- **Semantic Error Handling**: Never expose raw HTTP status codes (like 500) or backend variable names to the user. All business errors (e.g., `REFERRAL_ALREADY_CLAIMED`, `REFERRAL_SELF_INVITE_BLOCKED`) must be caught by the global interceptor and translated into localized, user-friendly Toast messages.
+- **Empty States (Call-to-Action)**: A page or feed should never just say "No Data". Every empty state must include a clear Call-to-Action (e.g., "Generate your first code", "Copy Link") to guide the user toward the intended behavior.
+- **Auth Loophole Prevention**: If a user is already authenticated, visiting `/login` or clicking "Start Free Trial" on the landing page must automatically and silently redirect them to the `/dashboard` to maintain a continuous flow.
