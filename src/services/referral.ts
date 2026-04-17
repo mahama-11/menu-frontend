@@ -67,5 +67,11 @@ export const referralService = {
     if (status) params.append('status', status);
     const response = await menuApiClient.get(`/referrals/me/commissions?${params.toString()}`);
     return response as unknown as { data: { commissions: Commission[], total: number } };
+  },
+
+  // 兑换为站内积分
+  redeemCommissions: async (): Promise<{ data: { amount_redeemed: number, credits_added: number } }> => {
+    const response = await menuApiClient.post('/referrals/me/commissions/redeem');
+    return response as unknown as { data: { amount_redeemed: number, credits_added: number } };
   }
 };

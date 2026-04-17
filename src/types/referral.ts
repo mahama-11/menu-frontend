@@ -59,6 +59,9 @@ export interface ReferralCodeResolve {
   trigger_type: string;
   promoter_name?: string;
   promoter_id?: string;
+  reward_policy_desc?: string;
+  settlement_delay_days?: number;
+  allow_repeat?: boolean;
 }
 
 export interface ReferralOverview {

@@ -188,9 +188,42 @@ export default function RegisterPage() {
                 {resolvedCode && !isResolving && <CheckCircle2 className="absolute right-3 top-3 h-5 w-5 text-green-500" />}
               </div>
               {resolvedCode && (
-                <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
-                  Valid code from <strong>{resolvedCode.promoter_name || 'Partner'}</strong>
-                </p>
+                <div className="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-sm text-green-400 flex items-center gap-1 mb-2">
+                    Valid code from <strong className="text-green-300">{resolvedCode.promoter_name || 'Partner'}</strong>
+                  </p>
+                  
+                  {resolvedCode.reward_policy_desc && (
+                    <div className="space-y-1.5 mt-2 pt-2 border-t border-green-500/20">
+                      <p className="text-xs text-gray-300 flex items-start gap-2">
+                        <span className="text-green-400 shrink-0 mt-0.5">•</span>
+                        <span>
+                          <span className="text-gray-400">{t('ref.resolve.reward')}: </span>
+                          <span className="text-white">{resolvedCode.reward_policy_desc}</span>
+                        </span>
+                      </p>
+                      
+                      {(resolvedCode.settlement_delay_days !== undefined || resolvedCode.allow_repeat !== undefined) && (
+                        <div className="flex items-center gap-4 text-xs text-gray-400 pl-4">
+                          {resolvedCode.settlement_delay_days !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <span>{t('ref.resolve.delay')}:</span>
+                              <span className="text-gray-300">{resolvedCode.settlement_delay_days} {t('ref.resolve.delayDays')}</span>
+                            </span>
+                          )}
+                          {resolvedCode.allow_repeat !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <span>{t('ref.resolve.repeat')}:</span>
+                              <span className="text-gray-300">
+                                {resolvedCode.allow_repeat ? t('ref.resolve.repeatYes') : t('ref.resolve.repeatNo')}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
               {resolveError && (
                 <p className="text-xs text-red-400 mt-1">{resolveError}</p>

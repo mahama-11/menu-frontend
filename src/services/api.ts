@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import type { APIResponse } from '@/types/auth';
+import i18n from '@/locales/i18n';
 
 const MENU_API_BASE_URL = import.meta.env.VITE_MENU_API_BASE_URL || '/api/v1/menu';
 
@@ -19,6 +20,16 @@ export const apiClient = menuApiClient;
 // Helper to get auth token
 const getToken = () => localStorage.getItem('v_menu_token');
 const getOrgId = () => localStorage.getItem('v_menu_org_id');
+
+const getLocalizedErrorMessage = (errorCode: string, defaultHint?: string): string => {
+  const i18nKey = `err.${errorCode}`;
+  const translated = i18n.t(i18nKey);
+  // If i18next returns the key itself, it means translation is missing
+  if (translated !== i18nKey) {
+    return translated;
+  }
+  return defaultHint || errorCode;
+};
 
 const applyInterceptors = (client: typeof menuApiClient) => {
   client.interceptors.request.use(
@@ -55,7 +66,8 @@ const applyInterceptors = (client: typeof menuApiClient) => {
       if (resData && resData.code !== 0 && resData.code !== 200) {
         // Priority 1: Semantic error_code and error_hint from backend
         if (resData.error_code) {
-          return Promise.reject(new Error(resData.error_hint || resData.error_code));
+          const errMsg = getLocalizedErrorMessage(resData.error_code, resData.error_hint);
+          return Promise.reject(new Error(errMsg));
         }
         
         // Priority 2: Fallback to message
@@ -92,7 +104,8 @@ const applyInterceptors = (client: typeof menuApiClient) => {
 
         if (data) {
           if (data.error_code) {
-            return Promise.reject(new Error(data.error_hint || data.error_code));
+            const errMsg = getLocalizedErrorMessage(data.error_code, data.error_hint);
+            return Promise.reject(new Error(errMsg));
           }
           if (data.message || data.error) {
             return Promise.reject(new Error(data.message || data.error));
