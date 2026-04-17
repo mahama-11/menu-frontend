@@ -1,11 +1,12 @@
 import { menuApiClient } from './api';
 import type { 
+  ReferralProgram, 
   ReferralOverview, 
   ReferralCode, 
   ReferralConversion, 
   Commission,
-  ReferralProgram,
-  ReferralCodeResolve
+  ReferralCodeResolve,
+  RedeemResponse
 } from '@/types/referral';
 
 export const referralService = {
@@ -69,9 +70,9 @@ export const referralService = {
     return response as unknown as { data: { commissions: Commission[], total: number } };
   },
 
-  // 兑换为站内积分
-  redeemCommissions: async (): Promise<{ data: { amount_redeemed: number, credits_added: number } }> => {
+  // 兑换佣金
+  redeemCommissions: async (): Promise<{ data: RedeemResponse }> => {
     const response = await menuApiClient.post('/referrals/me/commissions/redeem');
-    return response as unknown as { data: { amount_redeemed: number, credits_added: number } };
+    return response as unknown as { data: RedeemResponse };
   }
 };

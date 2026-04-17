@@ -68,9 +68,18 @@ export interface ReferralOverview {
   total_conversions: number;
   total_commissions_earned: number;
   total_commissions_pending: number;
+  redeemable_commission: number;
+  redeemed_commission: number;
   currency: string;
   programs: ReferralProgram[];
   active_codes: ReferralCode[];
   recent_conversions: ReferralConversion[];
   recent_commissions: Commission[];
+}
+
+export interface RedeemResponse {
+  reward_ledger_id: string;
+  asset_code: string;
+  total_amount: number;
+  commissions: Commission[];
 }

@@ -101,7 +101,9 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
     setIsRedeeming(true);
     try {
       const res = await referralService.redeemCommissions();
-      showToast(t('ref.redeem.success') || `Redeemed ${res.data.amount_redeemed} for ${res.data.credits_added} credits!`, 'success');
+      const amount = res.data.total_amount;
+      const asset = res.data.asset_code;
+      showToast(t('ref.redeem.success') || `Redeemed ${amount} ${asset} successfully!`, 'success');
       fetchData(); // Refresh the overview and history
     } catch (err: unknown) {
       console.error(err);
@@ -267,10 +269,10 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
             <div className="mt-auto pt-4 border-t border-primary-500/20">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-3xl font-black text-primary-400">{overview?.total_commissions_earned || 0} <span className="text-sm font-normal text-primary-500/50">{overview?.currency}</span></p>
-                  <p className="text-xs text-primary-500/70 uppercase tracking-wider font-semibold">{t('ref.stat.earned')}</p>
+                  <p className="text-3xl font-black text-primary-400">{overview?.redeemable_commission || 0} <span className="text-sm font-normal text-primary-500/50">{overview?.currency}</span></p>
+                  <p className="text-xs text-primary-500/70 uppercase tracking-wider font-semibold">{t('ref.stat.redeemable')}</p>
                 </div>
-                {overview && overview.total_commissions_earned > 0 && (
+                {overview && overview.redeemable_commission > 0 && (
                   <button
                     onClick={handleRedeem}
                     disabled={isRedeeming}
@@ -281,6 +283,12 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                   </button>
                 )}
               </div>
+              {overview && overview.redeemed_commission > 0 && (
+                <div className="mt-3 pt-3 border-t border-primary-500/10 flex items-center justify-between">
+                  <p className="text-xs text-primary-500/50 uppercase tracking-wider font-semibold">{t('ref.stat.redeemed')}</p>
+                  <p className="text-sm font-bold text-primary-400/80">{overview.redeemed_commission} <span className="text-xs font-normal">{overview.currency}</span></p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -306,9 +314,9 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
             >
               <option value="all">All Conversions</option>
               <option value="tracked">Tracked</option>
-              <option value="pending">Pending</option>
-              <option value="eligible">Eligible</option>
-              <option value="commission_earned">Earned</option>
+              <option value="pending_reward">Pending Reward</option>
+              <option value="commission_earned">Commission Earned</option>
+              <option value="reward_issued">Reward Issued</option>
               <option value="rejected">Rejected</option>
               <option value="reversed">Reversed</option>
             </select>
@@ -320,6 +328,7 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
               <option value="all">All Commissions</option>
               <option value="pending">Pending</option>
               <option value="earned">Earned</option>
+              <option value="redeemed">Redeemed</option>
               <option value="settled">Settled</option>
               <option value="rejected">Rejected</option>
               <option value="reversed">Reversed</option>
@@ -343,7 +352,7 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                       item.type === 'conversion' 
                         ? 'bg-blue-500/20 text-blue-400' 
-                        : ['settled', 'earned'].includes(item.status)
+                        : ['settled', 'earned', 'reward_issued', 'redeemed', 'commission_earned'].includes(item.status)
                           ? 'bg-green-500/20 text-green-500' 
                           : ['rejected', 'reversed'].includes(item.status)
                             ? 'bg-red-500/20 text-red-500'
@@ -362,13 +371,15 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                         <p className="text-white font-medium text-sm">
                           {item.type === 'conversion' 
                             ? (t('ref.feed.conv') || '🎉 Someone joined using your link') 
-                            : ['settled', 'earned'].includes(item.status)
+                            : ['settled', 'earned', 'commission_earned', 'reward_issued'].includes(item.status)
                               ? (t('ref.feed.comm') || '💰 Commission earned') 
-                              : ['rejected'].includes(item.status)
-                                ? (t('ref.feed.commRejected') || '❌ Commission rejected')
-                                : ['reversed'].includes(item.status)
-                                  ? (t('ref.feed.commReversed') || '↩️ Commission reversed')
-                                  : (t('ref.feed.commPending') || '⏳ Commission pending')
+                              : ['redeemed'].includes(item.status)
+                                ? (t('ref.feed.redeemed') || '🔄 Commission redeemed')
+                                : ['rejected'].includes(item.status)
+                                  ? (t('ref.feed.commRejected') || '❌ Commission rejected')
+                                  : ['reversed'].includes(item.status)
+                                    ? (t('ref.feed.commReversed') || '↩️ Commission reversed')
+                                    : (t('ref.feed.commPending') || '⏳ Commission pending')
                           }
                         </p>
                         {item.desc && <p className="text-xs text-gray-500 mt-1">{item.desc}</p>}
@@ -379,11 +390,13 @@ export default function ReferralCenter({ canManageReferral }: ReferralCenterProp
                       </div>
                       
                       <div className={`text-right ${
-                        ['settled', 'earned', 'commission_earned'].includes(item.status) || item.type === 'conversion' 
+                        ['settled', 'earned', 'commission_earned', 'reward_issued'].includes(item.status) || item.type === 'conversion' 
                           ? 'text-green-400' 
-                          : ['rejected', 'reversed'].includes(item.status)
-                            ? 'text-red-400 line-through opacity-70'
-                            : 'text-yellow-400'
+                          : ['redeemed'].includes(item.status)
+                            ? 'text-blue-400'
+                            : ['rejected', 'reversed'].includes(item.status)
+                              ? 'text-red-400 line-through opacity-70'
+                              : 'text-yellow-400'
                       }`}>
                         <p className="font-bold text-lg">+{item.amount}</p>
                         <p className="text-xs opacity-70 uppercase tracking-wider">{item.currency}</p>
