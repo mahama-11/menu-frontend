@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useI18n } from '@/hooks/useI18n';
 import { useEffect, useState } from 'react';
+import { useAuthStore } from '@/store/authStore';
 
 export default function Landing() {
   const { t } = useI18n();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -53,9 +55,9 @@ export default function Landing() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            <Link to="/register" className="btn-primary px-8 py-4 rounded-xl text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2">
+            <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-primary px-8 py-4 rounded-xl text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-              <span>{t('hero.cta1')}</span>
+              <span>{isAuthenticated ? t('nav.cta') : t('hero.cta1')}</span>
             </Link>
             <Link to="/demo" className="btn-outline px-8 py-4 rounded-xl text-base font-semibold w-full sm:w-auto flex items-center justify-center gap-2">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5,3 19,12 5,21 5,3"/></svg>
@@ -399,7 +401,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/register" className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.free.btn')}</Link>
+              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.free.btn')}</Link>
             </div>
 
             {/* Pro */}
@@ -430,7 +432,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/register" className="btn-primary w-full py-3 rounded-xl font-bold block text-center">{t('price.pro.btn')}</Link>
+              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-primary w-full py-3 rounded-xl font-bold block text-center">{t('price.pro.btn')}</Link>
             </div>
 
             {/* Growth */}
@@ -458,7 +460,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/register" className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.growth.btn')}</Link>
+              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.growth.btn')}</Link>
             </div>
           </div>
           
@@ -471,7 +473,7 @@ export default function Landing() {
                 <h3 className="font-bold text-lg mb-1">{t('referral.title')}</h3>
                 <p className="text-sm text-gray-400">{t('referral.desc')}</p>
               </div>
-              <Link to="/register" className="btn-primary px-6 py-3 rounded-xl font-semibold flex-shrink-0 block text-center">{t('referral.btn')}</Link>
+              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-primary px-6 py-3 rounded-xl font-semibold flex-shrink-0 block text-center">{t('referral.btn')}</Link>
             </div>
           </div>
         </div>
@@ -528,9 +530,9 @@ export default function Landing() {
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4">{t('cta.title')}</h2>
             <p className="text-lg text-gray-400 mb-8 max-w-lg mx-auto">{t('cta.subtitle')}</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/register" className="btn-primary px-10 py-4 rounded-xl text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2">
+              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-primary px-10 py-4 rounded-xl text-base font-bold w-full sm:w-auto flex items-center justify-center gap-2">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-                <span>{t('cta.cta1')}</span>
+                <span>{isAuthenticated ? t('nav.cta') : t('cta.cta1')}</span>
               </Link>
               <Link to="/#pricing" className="btn-outline px-10 py-4 rounded-xl text-base font-semibold w-full sm:w-auto">
                 {t('cta.cta2')}

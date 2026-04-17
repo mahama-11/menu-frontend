@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { authService } from '@/services/auth';
@@ -10,8 +10,17 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const login = useAuthStore(state => state.login);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isLoadingAuth = useAuthStore(state => state.isLoading);
   const { showToast } = useToastStore();
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!isLoadingAuth && isAuthenticated) {
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, isLoadingAuth, navigate, location]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

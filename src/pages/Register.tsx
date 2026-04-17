@@ -1,19 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, User, Store, Loader2, ArrowRight, Tag, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { User, Store, Mail, Lock, Loader2, ArrowRight, Tag, CheckCircle2 } from 'lucide-react';
 import { authService } from '@/services/auth';
 import { referralService } from '@/services/referral';
-import type { ReferralCodeResolve } from '@/types/referral';
 import { useAuthStore } from '@/store/authStore';
 import { useToastStore } from '@/store/toastStore';
+import type { ReferralCodeResolve } from '@/types/referral';
 import { useI18n } from '@/hooks/useI18n';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const login = useAuthStore(state => state.login);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const isLoadingAuth = useAuthStore(state => state.isLoading);
   const { showToast } = useToastStore();
   const { t } = useI18n();
+
+  useEffect(() => {
+    if (!isLoadingAuth && isAuthenticated) {
+      const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, isLoadingAuth, navigate, location]);
 
   const [name, setName] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
