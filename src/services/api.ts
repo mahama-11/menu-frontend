@@ -51,7 +51,7 @@ const applyInterceptors = (client: typeof menuApiClient) => {
   );
 
   client.interceptors.response.use(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (response: AxiosResponse<APIResponse>): any => {
       const resData = response.data;
 

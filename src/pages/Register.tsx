@@ -56,8 +56,8 @@ export default function RegisterPage() {
     setResolveError('');
     try {
       const res = await referralService.resolveCode(code);
-      if (res && res.data) {
-        setResolvedCode(res.data);
+      if (res) {
+        setResolvedCode(res);
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Invalid referral code';

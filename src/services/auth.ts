@@ -56,14 +56,12 @@ export const authService = {
     return response as unknown as { balance: number; permanent_balance?: number; reward_balance?: number; allowance_balance?: number; max_credits?: number; plan_name?: string; reset_date?: string };
   },
 
-  getWalletSummary: async ():Promise<{ data: { summaries: import('@/types/auth').WalletSummary[] } }> => {
-    const response = await menuApiClient.get('/user/wallet-summary');
-    return response as unknown as { data: { summaries: import('@/types/auth').WalletSummary[] } };
+  getWalletSummary: async ():Promise<import('@/types/auth').WalletSummaryResponse> => {
+    return menuApiClient.get('/user/wallet-summary') as unknown as import('@/types/auth').WalletSummaryResponse;
   },
 
-  getProfile: async ():Promise<{ data: ProfileResponse }> => {
-    const response = await menuApiClient.get('/user/profile');
-    return response as unknown as { data: ProfileResponse };
+  getProfile: async ():Promise<ProfileResponse> => {
+    return menuApiClient.get('/user/profile') as unknown as ProfileResponse;
   },
 
   updateProfile: async (name: string, restaurant_name: string, language_preference: string):Promise<unknown> => {
@@ -71,8 +69,17 @@ export const authService = {
     return response;
   },
 
-  getActivities: async (limit: number = 20, offset: number = 0):Promise<{ data: ActivitiesResponse }> => {
-    const response = await menuApiClient.get(`/user/activities?limit=${limit}&offset=${offset}`);
-    return response as unknown as { data: ActivitiesResponse };
-  }
+  getActivities: async (limit: number = 20, offset: number = 0):Promise<ActivitiesResponse> => {
+    return menuApiClient.get(`/user/activities?limit=${limit}&offset=${offset}`) as unknown as ActivitiesResponse;
+  },
+
+  getWalletHistory: async (limit: number = 20, offset: number = 0):Promise<import('@/types/wallet').WalletHistoryResponse> => {
+    return menuApiClient.get(`/user/wallet-history?limit=${limit}&offset=${offset}`) as unknown as import('@/types/wallet').WalletHistoryResponse;
+  },
+
+  getAuditHistory: async (limit: number = 20, offset: number = 0, targetType?: string):Promise<import('@/types/wallet').AuditHistoryResponse> => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (targetType) params.append('target_type', targetType);
+    return menuApiClient.get(`/user/audit-history?${params.toString()}`) as unknown as import('@/types/wallet').AuditHistoryResponse;
+  },
 };

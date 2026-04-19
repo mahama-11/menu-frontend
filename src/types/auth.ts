@@ -36,7 +36,7 @@ export interface AccessContext {
   platform_permissions?: string[];
 }
 
-export interface WalletSummary {
+export interface WalletAssetSummary {
   asset_code: string;
   total_balance: number;
   permanent_balance: number;
@@ -48,6 +48,17 @@ export interface WalletSummary {
     amount: number;
     expires_at?: string;
   }[];
+}
+
+export interface WalletSummaryResponse {
+  billing_subject_type: string;
+  billing_subject_id: string;
+  product_code: string;
+  total_balance: number;
+  permanent_balance: number;
+  reward_balance: number;
+  allowance_balance: number;
+  assets: WalletAssetSummary[];
 }
 
 export interface CreditsSummary {

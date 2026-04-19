@@ -15,14 +15,7 @@ export default function MainLayout() {
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const { isAuthenticated, user, fetchUser } = useAuthStore();
-
-  useEffect(() => {
-    // Only try to fetch if we are authenticated (have a token) but don't have the user object yet
-    if (isAuthenticated && !user) {
-      fetchUser().catch(() => {});
-    }
-  }, [isAuthenticated, user, fetchUser]);
+  const { isAuthenticated, user } = useAuthStore();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
@@ -74,7 +67,7 @@ export default function MainLayout() {
             <nav className="hidden md:flex ml-8 gap-8 text-sm font-medium">
               <Link to="/#features" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.features')}</Link>
               <Link to="/#workflow" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.how')}</Link>
-              <Link to="/demo" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.demo')}</Link>
+              <Link to="/studio" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.demo')}</Link>
               <Link to="/#pricing" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.pricing')}</Link>
               <Link to="/#faq" className="text-gray-400 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 rounded transition-colors">{t('nav.faq')}</Link>
             </nav>
@@ -151,7 +144,7 @@ export default function MainLayout() {
             <nav className="flex flex-col px-4 py-4 space-y-4">
               <Link to="/#features" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.features')}</Link>
               <Link to="/#workflow" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.how')}</Link>
-              <Link to="/demo" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.demo')}</Link>
+              <Link to="/studio" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.demo')}</Link>
               <Link to="/#pricing" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.pricing')}</Link>
               <Link to="/#faq" onClick={() => setIsMobileMenuOpen(false)} className="text-base font-medium text-gray-300 hover:text-white">{t('nav.faq')}</Link>
               <div className="border-t border-white/10 pt-4 flex flex-col gap-3">

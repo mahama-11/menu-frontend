@@ -7,12 +7,23 @@ This document outlines the core design philosophy and UI/UX constraints that def
 The AI Menu Growth Engine employs a distinct visual style known as "Glassmorphism." This style is characterized by:
 - **Dark Mode Native**: A very dark background (`#060608`) serves as the canvas for the bright, saturated colors of the food imagery.
 - **Translucent Panels**: Panels use semi-transparent white backgrounds (`bg-white/5` or `bg-white/10`) coupled with backdrop blur to create a frosted glass effect.
+- **Z-Axis Depth**: The interface relies on shadows, ambient glows (`.glow-orb`), and dynamic highlights to create a sense of physical thickness and hierarchy, rather than flat semi-transparent blocks.
 - **Vibrant Accents**: A striking orange primary color (`#f97316`), alongside secondary accents (purple, blue, green), provides high contrast against the dark background.
-- **Ambient Lighting**: Use of blurred, colored orbs (`.glow-orb`) placed strategically behind content blocks to add depth and warmth to the UI.
+- **Reactive Ambient Lighting**: Use of blurred, colored orbs (`.glow-orb`) placed strategically behind content blocks. These lights must react to system states (e.g., pulsing purple when AI is processing) to add life to the UI.
 
 **Constraint**: All new components must adhere to this aesthetic. Avoid flat, solid-colored blocks. Instead, rely on the `.glass` and `.glass-strong` utility classes defined in `index.css`.
 
-## 2. Adaptive Layout Strategy
+## 2. Interaction Design: The "Magic Studio" Approach
+
+For creation workflows (like the AI Image Studio), the application abandons traditional "form-like" or "step-by-step" linear wizards in favor of a spatial, immersive experience.
+
+- **Spatial Continuity**: The Canvas is the absolute center of the experience. It occupies 100% of the screen. Tools and controls must float above it as a "Dynamic Action Island" rather than pushing the canvas down.
+- **Progressive Disclosure**: Controls should mutate and expand only when needed. For example, the Action Island starts as a small upload button, expands into a full control panel when an image is ready, and collapses into a loading pill during generation.
+- **Defensive Design (Error Prevention & Guidance)**:
+  - Do not let the user click a disabled "Generate" button without feedback. If a prerequisite (like selecting a style) is missing, visually downgrade the CTA (e.g., make it a ghost button) and add animations (like a shake or pulse ring) to guide the user's eye to the missing step.
+  - "Empty States" on desktop must never be a blank screen. Use ambient backgrounds or inspiration galleries (Showcases) to fill the void and lower the onboarding barrier.
+
+## 3. Adaptive Layout Strategy
 
 We borrow the concept of the "Adaptive Shell" from the parent project, applying it to our specific needs:
 

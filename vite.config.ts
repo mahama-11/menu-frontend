@@ -9,6 +9,43 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+
+          if (id.includes('react-router-dom')) {
+            return 'router-vendor'
+          }
+
+          if (id.includes('react') || id.includes('scheduler')) {
+            return 'react-vendor'
+          }
+
+          if (id.includes('i18next') || id.includes('react-i18next')) {
+            return 'i18n-vendor'
+          }
+
+          if (id.includes('framer-motion') || id.includes('canvas-confetti')) {
+            return 'motion-vendor'
+          }
+
+          if (id.includes('lucide-react')) {
+            return 'icon-vendor'
+          }
+
+          if (id.includes('axios') || id.includes('zustand') || id.includes('clsx') || id.includes('tailwind-merge')) {
+            return 'app-vendor'
+          }
+
+          return 'vendor'
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
