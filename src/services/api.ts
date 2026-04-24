@@ -31,6 +31,20 @@ const getLocalizedErrorMessage = (errorCode: string, defaultHint?: string): stri
   return defaultHint || errorCode;
 };
 
+type MenuAPIError = Error & {
+  error_code?: string;
+  error_hint?: string;
+  status?: number;
+};
+
+const createMenuAPIError = (message: string, options?: { error_code?: string; error_hint?: string; status?: number }): MenuAPIError => {
+  const error = new Error(message) as MenuAPIError;
+  if (options?.error_code) error.error_code = options.error_code;
+  if (options?.error_hint) error.error_hint = options.error_hint;
+  if (options?.status !== undefined) error.status = options.status;
+  return error;
+};
+
 const applyInterceptors = (client: typeof menuApiClient) => {
   client.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
@@ -67,13 +81,17 @@ const applyInterceptors = (client: typeof menuApiClient) => {
         // Priority 1: Semantic error_code and error_hint from backend
         if (resData.error_code) {
           const errMsg = getLocalizedErrorMessage(resData.error_code, resData.error_hint);
-          return Promise.reject(new Error(errMsg));
+          return Promise.reject(createMenuAPIError(errMsg, {
+            error_code: resData.error_code,
+            error_hint: resData.error_hint,
+            status: response.status,
+          }));
         }
         
         // Priority 2: Fallback to message
         const errorMsg = resData.message || resData.error || 'Unknown business error';
         
-        return Promise.reject(new Error(errorMsg));
+        return Promise.reject(createMenuAPIError(errorMsg, { status: response.status }));
       }
 
       return response.data;
@@ -105,10 +123,14 @@ const applyInterceptors = (client: typeof menuApiClient) => {
         if (data) {
           if (data.error_code) {
             const errMsg = getLocalizedErrorMessage(data.error_code, data.error_hint);
-            return Promise.reject(new Error(errMsg));
+            return Promise.reject(createMenuAPIError(errMsg, {
+              error_code: data.error_code,
+              error_hint: data.error_hint,
+              status,
+            }));
           }
           if (data.message || data.error) {
-            return Promise.reject(new Error(data.message || data.error));
+            return Promise.reject(createMenuAPIError(String(data.message || data.error), { status }));
           }
         }
       }

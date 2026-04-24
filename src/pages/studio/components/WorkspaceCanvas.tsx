@@ -1,46 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { useGenerationJobStore, useVariantSelectionStore, useAssetStore } from '@/store/studioStore';
-import { generationJobService } from '@/services/studio';
 import { useToastStore } from '@/store/toastStore';
 import type { GenerationJob } from '@/types/studio';
+import { generationJobService } from '@/services/studio';
 import { CheckCircle2, Clock3, Download, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import WorkspaceShowcase from './WorkspaceShowcase';
 
 export default function WorkspaceCanvas({ compactHeader = false }: { compactHeader?: boolean }) {
   const { t } = useTranslation();
-  const { activeJobId, jobs, upsertJob, stopPolling } = useGenerationJobStore();
+  const { activeJobId, jobs, upsertJob, stopPolling, setActiveJob } = useGenerationJobStore();
   const { selectVariant, selectedVariantId } = useVariantSelectionStore();
-  const { addAsset, selectAsset } = useAssetStore();
+  const { addAsset, selectAsset, setInputMode } = useAssetStore();
   const { showToast } = useToastStore();
   const [isConfirming, setIsConfirming] = useState(false);
+  const handledTerminalJobRef = useRef<string | null>(null);
 
   const activeJob = jobs.find((job) => job.job_id === activeJobId);
-
-  useEffect(() => {
-    if (!activeJobId) return;
-
-    const currentJob = jobs.find((job) => job.job_id === activeJobId);
-    if (!currentJob || ['completed', 'failed', 'canceled'].includes(currentJob.status)) {
-      stopPolling(activeJobId);
-      return;
-    }
-
-    const interval = window.setInterval(async () => {
-      try {
-        const updatedJob = await generationJobService.getJob(activeJobId);
-        upsertJob(updatedJob);
-        if (['completed', 'failed', 'canceled'].includes(updatedJob.status)) {
-          stopPolling(activeJobId);
-        }
-      } catch (error) {
-        console.error('Polling failed:', error);
-      }
-    }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, [activeJobId, jobs, stopPolling, upsertJob]);
 
   const currentVariant = useMemo(() => {
     if (!activeJob?.variants?.length) return null;
@@ -67,6 +44,21 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
   const isFailed = activeJob?.status === 'failed';
   const isCanceled = activeJob?.status === 'canceled';
 
+  useEffect(() => {
+    if (!activeJob || !['failed', 'canceled'].includes(activeJob.status)) return;
+    const handledKey = `${activeJob.job_id}:${activeJob.status}:${activeJob.updated_at}`;
+    if (handledTerminalJobRef.current === handledKey) return;
+    handledTerminalJobRef.current = handledKey;
+    stopPolling(activeJob.job_id);
+    selectVariant(null);
+    setActiveJob(null);
+    if (activeJob.status === 'canceled') {
+      showToast('已取消当前任务', 'success');
+      return;
+    }
+    showToast(activeJob.error_message || activeJob.stage_message || '服务异常，请重试', 'error');
+  }, [activeJob, selectVariant, setActiveJob, showToast, stopPolling]);
+
   const handleSelectFinal = async () => {
     if (!activeJob || !currentVariant) return;
     setIsConfirming(true);
@@ -83,29 +75,14 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
     }
   };
 
-  const handleSetAsBase = (assetUrl: string) => {
-    if (!assetUrl) {
+  const handleSetAsBase = () => {
+    if (!currentVariant?.asset) {
       showToast(t('studio.canvas.noPreview', { defaultValue: 'Preview is not ready yet' }), 'error');
       return;
     }
-    const newAssetId = `asset-${Date.now()}`;
-    addAsset({
-      asset_id: newAssetId,
-      url: assetUrl,
-      source_url: assetUrl,
-      preview_url: assetUrl,
-      type: 'generated',
-      asset_type: 'generated',
-      source_type: 'generated',
-      status: 'ready',
-      width: 1024,
-      height: 1024,
-      mime_type: 'image/png',
-      size_bytes: 0,
-      created_at: new Date().toISOString(),
-      file_name: 'refined-result.png',
-    });
-    selectAsset(newAssetId);
+    addAsset(currentVariant.asset);
+    selectAsset(currentVariant.asset.asset_id);
+    setInputMode('image_to_image');
     showToast(t('studio.canvas.reuseReady', { defaultValue: 'Result moved back as a new base image' }), 'success');
   };
 
@@ -115,6 +92,8 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
       const updatedJob = await generationJobService.cancelJob(activeJob.job_id);
       upsertJob(updatedJob);
       stopPolling(activeJob.job_id);
+      selectVariant(null);
+      setActiveJob(null);
       showToast(t('studio.canvas.cancelSuccess', { defaultValue: 'Generation job canceled' }), 'success');
     } catch (error) {
       console.error(error);
@@ -201,13 +180,15 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
                       {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                       {t('studio.canvas.selectFinal', { defaultValue: 'Select as Final Result' })}
                     </button>
-                    <button
-                      onClick={() => handleSetAsBase(currentVariant.asset?.url || currentVariant.asset?.source_url || '')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-400/18 bg-purple-400/10 px-4 py-3 text-sm font-semibold text-purple-100 transition hover:bg-purple-400/14"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      {t('studio.canvas.useAsBase', { defaultValue: 'Use as New Base Image' })}
-                    </button>
+                    {activeJob.input_mode === 'image_to_image' && (
+                      <button
+                        onClick={handleSetAsBase}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-400/18 bg-purple-400/10 px-4 py-3 text-sm font-semibold text-purple-100 transition hover:bg-purple-400/14"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {t('studio.canvas.useAsBase', { defaultValue: 'Use as New Base Image' })}
+                      </button>
+                    )}
                     <a
                       href={currentVariant.asset.url || currentVariant.asset.source_url}
                       target="_blank"

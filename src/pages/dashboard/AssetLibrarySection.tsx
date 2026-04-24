@@ -6,7 +6,7 @@ import { assetService, sharePostService } from '@/services/studio';
 import type { AssetLibraryItem, SharePost } from '@/types/studio';
 import { useAssetStore } from '@/store/studioStore';
 import { useToastStore } from '@/store/toastStore';
-import { Archive, ImagePlus, Library, Send, Share2, Sparkles, Upload } from 'lucide-react';
+import { Archive, Bookmark, Compass, ImagePlus, Library, Send, Share2, Sparkles, Upload } from 'lucide-react';
 
 export default function AssetLibrarySection() {
   const { t } = useI18n();
@@ -16,27 +16,50 @@ export default function AssetLibrarySection() {
   const selectAsset = useAssetStore((state) => state.selectAsset);
   const [items, setItems] = useState<AssetLibraryItem[]>([]);
   const [posts, setPosts] = useState<SharePost[]>([]);
+  const [publicFeed, setPublicFeed] = useState<SharePost[]>([]);
+  const [favoritePosts, setFavoritePosts] = useState<SharePost[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'generated' | 'source' | 'shared'>('all');
+  const [feedSort, setFeedSort] = useState<'recent' | 'popular'>('recent');
   const [publishingAssetId, setPublishingAssetId] = useState<string | null>(null);
+  const [favoriteUpdatingId, setFavoriteUpdatingId] = useState<string | null>(null);
   const errorLoadText = t('dash.library.errorLoad');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [library, shareList] = await Promise.all([
+      const [libraryResult, shareListResult, feedListResult, favoriteListResult] = await Promise.allSettled([
         assetService.getLibrary({ limit: 24, offset: 0 }),
         sharePostService.listPosts({ limit: 20 }),
+        sharePostService.listPublicFeed({ limit: 12, sort: feedSort }),
+        sharePostService.listFavorites({ limit: 12 }),
       ]);
-      setItems(library.items || []);
-      setPosts(shareList.items || []);
+
+      if (libraryResult.status !== 'fulfilled') {
+        throw libraryResult.reason;
+      }
+
+      if (shareListResult.status === 'rejected') {
+        console.error(shareListResult.reason);
+      }
+      if (feedListResult.status === 'rejected') {
+        console.error(feedListResult.reason);
+      }
+      if (favoriteListResult.status === 'rejected') {
+        console.error(favoriteListResult.reason);
+      }
+
+      setItems(libraryResult.value.items || []);
+      setPosts(shareListResult.status === 'fulfilled' ? shareListResult.value.items || [] : []);
+      setPublicFeed(feedListResult.status === 'fulfilled' ? feedListResult.value.items || [] : []);
+      setFavoritePosts(favoriteListResult.status === 'fulfilled' ? favoriteListResult.value.items || [] : []);
     } catch (error) {
       console.error(error);
       showToast(error instanceof Error ? error.message : errorLoadText, 'error');
     } finally {
       setLoading(false);
     }
-  }, [errorLoadText, showToast]);
+  }, [errorLoadText, feedSort, showToast]);
 
   useEffect(() => {
     // Load once on mount. Reloads should be explicit to avoid unstable callback loops.
@@ -50,6 +73,8 @@ export default function AssetLibrarySection() {
       return item.asset.asset_type === filter;
     });
   }, [filter, items]);
+
+  const favoriteIds = useMemo(() => new Set(favoritePosts.map((post) => post.share_id)), [favoritePosts]);
 
   const handlePublish = async (item: AssetLibraryItem) => {
     setPublishingAssetId(item.asset.asset_id);
@@ -79,6 +104,47 @@ export default function AssetLibrarySection() {
     }
     selectAsset(item.asset.asset_id);
     navigate('/studio');
+  };
+
+  const handleCopyShareLink = async (shareUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast(t('share.public.copySuccess'), 'success');
+    } catch (error) {
+      console.error(error);
+      showToast(error instanceof Error ? error.message : t('share.public.copyError'), 'error');
+    }
+  };
+
+  const handleFavoriteShare = async (post: SharePost, active: boolean) => {
+    setFavoriteUpdatingId(post.share_id);
+    try {
+      const result = await sharePostService.setFavorite(post.share_id, active);
+      setPublicFeed((current) =>
+        current.map((item) =>
+          item.share_id === post.share_id
+            ? { ...item, favorite_count: result.favorite_count }
+            : item,
+        ),
+      );
+      if (active) {
+        setFavoritePosts((current) => {
+          const exists = current.some((item) => item.share_id === post.share_id);
+          if (exists) {
+            return current.map((item) => item.share_id === post.share_id ? { ...item, favorite_count: result.favorite_count } : item);
+          }
+          return [{ ...post, favorite_count: result.favorite_count }, ...current];
+        });
+      } else {
+        setFavoritePosts((current) => current.filter((item) => item.share_id !== post.share_id));
+      }
+      showToast(active ? t('share.feed.savedSuccess') : t('share.feed.removedSuccess'), 'success');
+    } catch (error) {
+      console.error(error);
+      showToast(error instanceof Error ? error.message : t('share.feed.favoriteError'), 'error');
+    } finally {
+      setFavoriteUpdatingId(null);
+    }
   };
 
   if (loading) {
@@ -253,10 +319,205 @@ export default function AssetLibrarySection() {
                   <span>{post.like_count} {t('dash.library.likes')}</span>
                   <span>{post.favorite_count} {t('dash.library.saves')}</span>
                 </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <a
+                    href={post.share_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    {t('share.public.share')}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyShareLink(post.share_url || window.location.origin)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    {t('share.public.copy')}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="glass rounded-2xl p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-primary-300">
+                <Compass className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">{t('share.feed.title')}</h3>
+                <p className="text-sm text-gray-400">{t('share.feed.subtitle')}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+              <button
+                type="button"
+                onClick={() => setFeedSort('recent')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${feedSort === 'recent' ? 'bg-white/10 text-white' : 'text-white/55 hover:text-white'}`}
+              >
+                {t('share.feed.sortRecent')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedSort('popular')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${feedSort === 'popular' ? 'bg-white/10 text-white' : 'text-white/55 hover:text-white'}`}
+              >
+                {t('share.feed.sortPopular')}
+              </button>
+            </div>
+          </div>
+
+          {publicFeed.length === 0 ? (
+            <p className="text-sm text-gray-500">{t('share.feed.emptyFeed')}</p>
+          ) : (
+            <div className="space-y-3">
+              {publicFeed.map((post) => {
+                const isSaved = favoriteIds.has(post.share_id);
+                return (
+                  <ShareFeedCard
+                    key={post.share_id}
+                    post={post}
+                    saved={isSaved}
+                    pending={favoriteUpdatingId === post.share_id}
+                    onCopy={() => void handleCopyShareLink(post.share_url || window.location.origin)}
+                    onToggleSave={() => void handleFavoriteShare(post, !isSaved)}
+                    openLabel={t('dash.library.open')}
+                    copyLabel={t('share.public.copy')}
+                    saveLabel={isSaved ? t('share.feed.saved') : t('share.feed.save')}
+                    savedBadgeLabel={t('share.feed.savedBadge')}
+                    viewsLabel={t('share.public.views')}
+                    likesLabel={t('share.public.likes')}
+                    savesLabel={t('share.public.favorites')}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="glass rounded-2xl p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-primary-300">
+              <Bookmark className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white">{t('share.feed.savesTitle')}</h3>
+              <p className="text-sm text-gray-400">{t('share.feed.savesSubtitle')}</p>
+            </div>
+          </div>
+
+          {favoritePosts.length === 0 ? (
+            <p className="text-sm text-gray-500">{t('share.feed.emptySaved')}</p>
+          ) : (
+            <div className="space-y-3">
+              {favoritePosts.map((post) => (
+                <ShareFeedCard
+                  key={post.share_id}
+                  post={post}
+                  saved
+                  pending={favoriteUpdatingId === post.share_id}
+                  onCopy={() => void handleCopyShareLink(post.share_url || window.location.origin)}
+                  onToggleSave={() => void handleFavoriteShare(post, false)}
+                  openLabel={t('dash.library.open')}
+                  copyLabel={t('share.public.copy')}
+                  saveLabel={t('share.feed.removeSave')}
+                  savedBadgeLabel={t('share.feed.savedBadge')}
+                  viewsLabel={t('share.public.views')}
+                  likesLabel={t('share.public.likes')}
+                  savesLabel={t('share.public.favorites')}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShareFeedCard({
+  post,
+  saved,
+  pending,
+  onCopy,
+  onToggleSave,
+  openLabel,
+  copyLabel,
+  saveLabel,
+  savedBadgeLabel,
+  viewsLabel,
+  likesLabel,
+  savesLabel,
+}: {
+  post: SharePost;
+  saved: boolean;
+  pending: boolean;
+  onCopy: () => void;
+  onToggleSave: () => void;
+  openLabel: string;
+  copyLabel: string;
+  saveLabel: string;
+  savedBadgeLabel: string;
+  viewsLabel: string;
+  likesLabel: string;
+  savesLabel: string;
+}) {
+  const shareHref = post.share_url || window.location.origin;
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-white">{post.title || `Share ${post.share_id.slice(0, 6)}`}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-400">{post.caption || shareHref || post.visibility}</p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${saved ? 'border-amber-400/25 bg-amber-500/12 text-amber-200' : 'border-white/10 bg-white/[0.04] text-white/55'}`}>
+          {saved ? savedBadgeLabel : post.visibility}
+        </span>
+      </div>
+      <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
+        <span>{post.view_count} {viewsLabel}</span>
+        <span>{post.like_count} {likesLabel}</span>
+        <span>{post.favorite_count} {savesLabel}</span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          href={shareHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          {openLabel}
+        </a>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          {copyLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleSave}
+          disabled={pending}
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+            saved
+              ? 'border-amber-400/25 bg-amber-500/12 text-amber-200 hover:bg-amber-500/18'
+              : 'border-white/10 bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white'
+          } disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {pending ? <Sparkles className="h-3.5 w-3.5 animate-pulse" /> : <Bookmark className="h-3.5 w-3.5" />}
+          {saveLabel}
+        </button>
       </div>
     </div>
   );

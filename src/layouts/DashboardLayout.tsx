@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Library, Menu, Settings, Sparkles, User, Users, WalletCards, X } from 'lucide-react';
+import { BadgePercent, Library, Menu, Settings, Sparkles, User, Users, WalletCards, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useI18n } from '@/hooks/useI18n';
@@ -47,6 +47,8 @@ export default function DashboardLayout() {
   const permissions = user?.access?.menu_permissions || [];
   const hasReferralAccess = permissions.includes('menu.referral.read') || permissions.includes('menu.referral.manage');
   const canManageReferral = permissions.includes('menu.referral.manage');
+  const hasChannelAccess = permissions.includes('menu.channel.read') || permissions.includes('menu.channel.manage');
+  const canManageChannel = permissions.includes('menu.channel.manage');
   const creditPercent = Math.min(100, Math.max(0, (credits / Math.max(maxCredits, 1)) * 100));
   const tDash = (key: string) => getDashboardText(lang, key);
 
@@ -56,11 +58,14 @@ export default function DashboardLayout() {
     { to: '/dashboard/library', key: 'dash.nav.library', icon: <Library className="h-4 w-4" /> },
     { to: '/dashboard/history', key: 'dash.nav.history', icon: <WalletCards className="h-4 w-4" /> },
     { to: '/dashboard/referral', key: 'dash.route.referral', icon: <Users className="h-4 w-4" />, hidden: !hasReferralAccess },
+    { to: '/dashboard/channel', key: 'dash.route.channel', icon: <BadgePercent className="h-4 w-4" />, hidden: !hasChannelAccess },
     { to: '/dashboard/settings', key: 'dash.nav.settings', icon: <Settings className="h-4 w-4" /> },
-  ]), [hasReferralAccess]);
+  ]), [hasChannelAccess, hasReferralAccess]);
 
   const pageTitle = (() => {
-    const item = navItems.find((entry) => location.pathname === entry.to || (entry.to === '/dashboard' && location.pathname === '/dashboard'));
+    const item = navItems
+      .filter((entry) => location.pathname === entry.to || location.pathname.startsWith(`${entry.to}/`) || (entry.to === '/dashboard' && location.pathname === '/dashboard'))
+      .sort((left, right) => right.to.length - left.to.length)[0];
     return item ? tDash(item.key) : 'Dashboard';
   })();
 
@@ -208,7 +213,7 @@ export default function DashboardLayout() {
         )}
 
         <div className="relative z-10 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
-          <Outlet context={{ hasReferralAccess, canManageReferral }} />
+          <Outlet context={{ hasReferralAccess, canManageReferral, hasChannelAccess, canManageChannel }} />
         </div>
       </main>
     </div>

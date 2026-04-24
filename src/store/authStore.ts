@@ -26,6 +26,7 @@ const WALLET_SUMMARIES_TTL_MS = 60_000;
 
 export const useWalletBalances = () => {
   const summaries = useAuthStore(state => state.walletSummaries);
+  const hasSummaries = Array.isArray(summaries);
   
   const allowance = summaries?.find(s => s.asset_code === 'MENU_MONTHLY_ALLOWANCE')?.total_balance || 0;
   const promoCredits = summaries?.find(s => s.asset_code === 'MENU_PROMO_CREDIT')?.total_balance || 0;
@@ -33,7 +34,7 @@ export const useWalletBalances = () => {
   const commission = summaries?.find(s => s.asset_code === 'COMMISSION_LEDGER')?.total_balance || 0;
   
   // Total usable balance for Studio (excluding commission)
-  const usableBalance = allowance + promoCredits + credits; 
+  const usableBalance = hasSummaries ? allowance + promoCredits + credits : null;
 
   return { allowance, promoCredits, credits, commission, usableBalance };
 };

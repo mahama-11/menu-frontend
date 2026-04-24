@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, History, Wallet } from 'lucide-react';
-import { useWalletBalances } from '@/store/authStore';
+import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import ControlPanel from './components/ControlPanel';
 import WorkspaceCanvas from './components/WorkspaceCanvas';
 import StyleMarketDrawer from './components/StyleMarketDrawer';
@@ -11,6 +11,11 @@ export default function StudioDesktop() {
   const { t } = useTranslation();
   const { usableBalance } = useWalletBalances();
   const [isMarketOpen, setIsMarketOpen] = useState(false);
+  const fetchWalletSummaries = useAuthStore(state => state.fetchWalletSummaries);
+
+  useEffect(() => {
+    void fetchWalletSummaries();
+  }, [fetchWalletSummaries]);
 
   return (
     <div className="flex h-screen bg-[#060608] text-white overflow-hidden relative font-sans">

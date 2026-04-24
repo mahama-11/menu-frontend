@@ -10,6 +10,7 @@ const LandingPage = lazy(() => import('@/pages/Landing'));
 const LoginPage = lazy(() => import('@/pages/Login'));
 const RegisterPage = lazy(() => import('@/pages/Register'));
 const StudioPage = lazy(() => import('@/pages/Studio'));
+const SharePostPage = lazy(() => import('@/pages/SharePost'));
 const PrivacyPage = lazy(() => import('@/pages/Privacy'));
 const TermsPage = lazy(() => import('@/pages/Terms'));
 const DashboardHomePage = lazy(() => import('@/pages/dashboard/DashboardHomePage'));
@@ -18,6 +19,13 @@ const AssetLibrarySection = lazy(() => import('@/pages/dashboard/AssetLibrarySec
 const HistoryCenter = lazy(() => import('@/pages/dashboard/HistoryCenter'));
 const DashboardReferralPage = lazy(() => import('@/pages/dashboard/DashboardReferralPage'));
 const DashboardSettingsPage = lazy(() => import('@/pages/dashboard/DashboardSettingsPage'));
+const ChannelLayout = lazy(() => import('@/pages/dashboard/channel/ChannelLayout'));
+const ChannelOverviewPage = lazy(() => import('@/pages/dashboard/channel/ChannelOverviewPage'));
+const ChannelCommissionsPage = lazy(() => import('@/pages/dashboard/channel/ChannelCommissionsPage'));
+const ChannelSettlementsPage = lazy(() => import('@/pages/dashboard/channel/ChannelSettlementsPage'));
+const ChannelCurrentBindingPage = lazy(() => import('@/pages/dashboard/channel/ChannelCurrentBindingPage'));
+const ChannelPreviewPage = lazy(() => import('@/pages/dashboard/channel/ChannelPreviewPage'));
+const ChannelAdjustmentsPage = lazy(() => import('@/pages/dashboard/channel/ChannelAdjustmentsPage'));
 
 const AppRoot = () => (
   <>
@@ -70,6 +78,10 @@ export const router = createBrowserRouter([
         element: withSuspense(<StudioPage />),
       },
       {
+        path: 'share/:token',
+        element: withSuspense(<SharePostPage />),
+      },
+      {
         path: 'login',
         element: withSuspense(<LoginPage />),
       },
@@ -108,6 +120,36 @@ export const router = createBrowserRouter([
           {
             path: 'settings',
             element: withSuspense(<DashboardSettingsPage />),
+          },
+          {
+            path: 'channel',
+            element: withSuspense(<ChannelLayout />),
+            children: [
+              {
+                index: true,
+                element: withSuspense(<ChannelOverviewPage />),
+              },
+              {
+                path: 'commissions',
+                element: withSuspense(<ChannelCommissionsPage />),
+              },
+              {
+                path: 'settlements',
+                element: withSuspense(<ChannelSettlementsPage />),
+              },
+              {
+                path: 'current-binding',
+                element: withSuspense(<ChannelCurrentBindingPage />),
+              },
+              {
+                path: 'preview',
+                element: withSuspense(<ChannelPreviewPage />),
+              },
+              {
+                path: 'adjustments',
+                element: withSuspense(<ChannelAdjustmentsPage />),
+              },
+            ],
           },
         ],
       },

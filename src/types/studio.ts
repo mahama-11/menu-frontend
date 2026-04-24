@@ -1,4 +1,5 @@
 export type JobMode = 'single' | 'batch' | 'variation' | 'refinement';
+export type StudioInputMode = 'text_to_image' | 'image_to_image';
 export type JobStatus = 'queued' | 'dispatching' | 'processing' | 'running' | 'completed' | 'failed' | 'canceled';
 export type JobStage =
   | 'queued'
@@ -60,7 +61,6 @@ export interface StylePreset {
 export type ChargeStatus = 'created' | 'reserved' | 'settled' | 'released' | 'failed_need_reconcile';
 
 export interface JobChargeSummary {
-  billing_enabled: boolean;
   billable: boolean;
   charge_mode?: string;
   resource_type?: string;
@@ -101,6 +101,7 @@ export interface GenerationJob {
   user_id?: string;
   organization_id?: string;
   mode: JobMode;
+  input_mode?: StudioInputMode;
   status: JobStatus;
   stage: JobStage;
   stage_message: string;
@@ -121,6 +122,8 @@ export interface GenerationJob {
   error_code?: string;
   error_message?: string;
   charge?: JobChargeSummary;
+  prompt_snapshot?: Record<string, any>;
+  params_snapshot?: Record<string, any>;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -187,6 +190,29 @@ export interface SharePost {
   updated_at: string;
 }
 
+export interface SharePostAsset {
+  asset_id: string;
+  file_name: string;
+  source_url: string;
+  preview_url?: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface SharePostDetail extends SharePost {
+  asset: SharePostAsset;
+}
+
+export interface ShareEngagement {
+  share_id: string;
+  view_count: number;
+  like_count: number;
+  favorite_count: number;
+  viewer_liked: boolean;
+  viewer_favorited: boolean;
+}
+
 export interface SharePostListResponse {
   items: SharePost[];
 }
@@ -201,6 +227,10 @@ export interface CreateSharePostRequest {
   metadata?: Record<string, any>;
 }
 
+export interface SetShareEngagementRequest {
+  active: boolean;
+}
+
 export const StudioBillingErrorCode = {
   ALLOWANCE_INSUFFICIENT: 'STUDIO_BILLING_ALLOWANCE_INSUFFICIENT',
   CREDITS_INSUFFICIENT: 'STUDIO_BILLING_CREDITS_INSUFFICIENT',
@@ -212,10 +242,12 @@ export const StudioBillingErrorCode = {
 
 export interface CreateJobRequest {
   mode: JobMode;
+  input_mode?: StudioInputMode;
   provider?: string;
   idempotency_key?: string;
   style_preset_id?: string;
   source_asset_ids: string[];
+  prompt?: string;
   requested_variants?: number;
   params?: Record<string, any>;
   metadata?: Record<string, any>;
@@ -229,5 +261,9 @@ export interface RegisterAssetRequest {
   file_name: string;
   source_url: string;
   preview_url?: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+  file_size?: number;
   metadata?: Record<string, any>;
 }

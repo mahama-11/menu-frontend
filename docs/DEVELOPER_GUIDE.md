@@ -99,3 +99,10 @@ Before committing code, you must ensure:
   - `VITE_PLATFORM_API_BASE_URL` defaults to `/api/platform/v1`
   - `VITE_MENU_API_BASE_URL` defaults to `/api/menu/v1`
   - Auth and org flows should use the platform API client, not the menu API client.
+
+## 9. Current Studio & Dashboard Facts
+
+- **Active Studio Route**: `/studio` currently mounts `src/pages/Studio.tsx` -> `src/pages/studio/StudioLayout.tsx`. `StudioDesktop.tsx` and `StudioMobile.tsx` still exist in the repo as alternate shells / in-progress variants, but they are not the route-mounted workspace for the main Studio entry.
+- **Studio Asset URLs**: frontend should treat backend-returned `source_url` / `preview_url` as browser-consumable URLs. Under the current backend contract these are Menu-owned signed content URLs for platform-stored assets, not public platform `/storage/*` paths and not third-party provider URLs.
+- **Studio Polling**: generation job polling must stop on terminal states (`completed`, `failed`, `canceled`) and should also stop after repeated transport failures. Do not reintroduce infinite component-local polling loops without retry limits.
+- **Dashboard Channel Surface**: current dashboard route tree now includes `/dashboard/channel` and nested pages for overview, commissions, settlements, current binding, preview, and adjustments. Frontend contract owners should keep `src/services/channel.ts` and `src/types/channel.ts` aligned with backend channel payloads.

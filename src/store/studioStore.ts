@@ -3,6 +3,7 @@ import type {
   StudioAsset, 
   StylePreset, 
   GenerationJob,
+  StudioInputMode,
 } from '@/types/studio';
 
 // ==================== Asset Store ====================
@@ -10,21 +11,40 @@ import type {
 interface AssetStoreState {
   assets: StudioAsset[];
   selectedAssetId: string | null;
+  inputMode: StudioInputMode;
+  promptDraft: string;
   loading: boolean;
   
   setAssets: (assets: StudioAsset[]) => void;
   addAsset: (asset: StudioAsset) => void;
+  removeAsset: (id: string) => void;
   selectAsset: (id: string | null) => void;
+  setInputMode: (mode: StudioInputMode) => void;
+  setPromptDraft: (prompt: string) => void;
 }
 
 export const useAssetStore = create<AssetStoreState>((set) => ({
   assets: [],
   selectedAssetId: null,
+  inputMode: 'image_to_image',
+  promptDraft: '',
   loading: false,
   
   setAssets: (assets) => set({ assets }),
-  addAsset: (asset) => set((state) => ({ assets: [asset, ...state.assets] })),
-  selectAsset: (id) => set({ selectedAssetId: id })
+  addAsset: (asset) => set((state) => {
+    const next = state.assets.filter((item) => item.asset_id !== asset.asset_id);
+    return { assets: [asset, ...next] };
+  }),
+  removeAsset: (id) => set((state) => ({
+    assets: state.assets.filter((asset) => asset.asset_id !== id),
+    selectedAssetId: state.selectedAssetId === id ? null : state.selectedAssetId,
+  })),
+  selectAsset: (id) => set({ selectedAssetId: id }),
+  setInputMode: (mode) => set((state) => ({
+    inputMode: mode,
+    selectedAssetId: mode === 'text_to_image' ? null : state.selectedAssetId,
+  })),
+  setPromptDraft: (prompt) => set({ promptDraft: prompt }),
 }));
 
 // ==================== Style Preset Store ====================

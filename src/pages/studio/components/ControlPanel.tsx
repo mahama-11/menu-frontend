@@ -5,10 +5,11 @@ import { useAssetStore, useGenerationJobStore, useStylePresetStore } from '@/sto
 import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { StudioBillingErrorCode } from '@/types/studio';
+import { readFileAsDataURL } from '@/utils/file';
 
 export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => void }) {
   const { t } = useTranslation();
-  const { assets, addAsset, selectAsset, selectedAssetId } = useAssetStore();
+  const { assets, addAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
   const { presets, selectedPresetId } = useStylePresetStore();
   const { upsertJob, setActiveJob, activeJobId, jobs } = useGenerationJobStore();
   const { usableBalance } = useWalletBalances();
@@ -25,7 +26,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
   const isJobProcessing = Boolean(activeJob && ['queued', 'processing', 'running', 'dispatching'].includes(activeJob.status));
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
   const selectedPreset = presets.find((preset) => preset.style_preset_id === selectedPresetId);
-  const hasRequiredSelection = Boolean(selectedAsset && selectedPreset);
+  const hasRequiredSelection = Boolean(selectedAsset && promptDraft.trim());
   const railStatusClass = hasRequiredSelection
     ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
     : 'border-white/8 bg-white/[0.04] text-white/60';
@@ -36,17 +37,21 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
 
     setUploading(true);
     try {
-      const mockUrl = URL.createObjectURL(file);
+      const dataUrl = await readFileAsDataURL(file);
       const newAsset = await assetService.registerAsset({
-        url: mockUrl,
-        type: 'original',
+        asset_type: 'source',
+        source_type: 'upload',
+        file_name: file.name,
+        source_url: dataUrl,
+        preview_url: dataUrl,
         mime_type: file.type,
-        size_bytes: file.size,
+        file_size: file.size,
         width: 1024,
         height: 1024,
       });
       addAsset(newAsset);
       selectAsset(newAsset.asset_id);
+      setInputMode('image_to_image');
     } catch (error) {
       console.error(error);
     } finally {
@@ -55,16 +60,21 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !selectedPresetId) return;
+    if (!selectedAssetId || !promptDraft.trim()) return;
 
     setGenerating(true);
     setBillingError(null);
     try {
       const job = await generationJobService.createJob({
         mode: 'single',
-        style_preset_id: selectedPresetId,
+        input_mode: 'image_to_image',
+        style_preset_id: selectedPresetId || undefined,
         source_asset_ids: [selectedAssetId],
+        prompt: promptDraft.trim(),
         requested_variants: 4,
+        params: {
+          prompt: promptDraft.trim(),
+        },
       });
       upsertJob(job);
       setActiveJob(job.job_id);
@@ -113,8 +123,8 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
             </p>
             <p className="mt-1 text-sm font-semibold text-white">
               {hasRequiredSelection
-                ? t('studio.panel.generateReady', { defaultValue: 'Ready to generate four refined results.' })
-                : t('studio.panel.generateLocked', { defaultValue: 'Select a base image and style preset to unlock generation.' })}
+                ? t('studio.panel.generateReady', { defaultValue: 'Ready to generate refined results.' })
+                : t('studio.panel.generateLockedPrompt', { defaultValue: 'Upload a base image and enter a custom prompt to unlock generation.' })}
             </p>
           </div>
         </div>
@@ -147,6 +157,16 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
             </span>
           </button>
 
+          <div className="min-w-[260px] flex-[1.2] rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-orange-200/70">{t('studio.panel.customPrompt', { defaultValue: 'Custom Prompt' })}</p>
+            <textarea
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              placeholder={t('studio.prompt.imageToImagePlaceholder', { defaultValue: '描述希望保留的主体、要替换的元素、风格、光线和构图...' })}
+              className="mt-2 h-24 w-full resize-none rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-white/25 outline-none focus:border-orange-400/25"
+            />
+          </div>
+
           <ArrowRight className="hidden h-4 w-4 shrink-0 text-white/22 xl:block" />
 
           <button
@@ -162,9 +182,9 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-purple-200/70">{t('studio.step2.title')}</p>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-purple-200/70">{t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })}</p>
               <p className="truncate text-sm font-semibold text-white">
-                {selectedPreset ? selectedPreset.name : t('studio.panel.notSelected', { defaultValue: 'Not selected' })}
+                {selectedPreset ? selectedPreset.name : t('studio.panel.optional', { defaultValue: 'Optional' })}
               </p>
             </div>
             <span className="shrink-0 text-[11px] font-medium text-white/42">
@@ -182,7 +202,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
           </div>
           <button
             onClick={handleGenerate}
-            disabled={!selectedAssetId || !selectedPresetId || isJobProcessing || generating}
+            disabled={!selectedAssetId || !promptDraft.trim() || isJobProcessing || generating}
             className="relative min-w-[220px] flex-1 overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all duration-500 hover:from-orange-500 hover:to-orange-400 hover:shadow-[0_0_30px_rgba(249,115,22,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-orange-600 xl:flex-none"
           >
             <span className="relative z-10 flex items-center justify-center gap-2 text-sm">

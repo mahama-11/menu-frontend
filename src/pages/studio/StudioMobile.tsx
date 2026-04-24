@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, CreditCard, LayoutGrid, Loader2, Search, Sparkles, Upload, Wallet } from 'lucide-react';
 import { useAssetStore, useStylePresetStore, useGenerationJobStore } from '@/store/studioStore';
 import { useWalletBalances, useAuthStore } from '@/store/authStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { StudioBillingErrorCode } from '@/types/studio';
+import { readFileAsDataURL } from '@/utils/file';
 import WorkspaceCanvas from './components/WorkspaceCanvas';
 import StyleMarketDrawer from './components/StyleMarketDrawer';
 
 export default function StudioMobile() {
   const { t } = useTranslation();
-  const { assets, addAsset, selectAsset, selectedAssetId } = useAssetStore();
+  const { assets, addAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
   const { presets, selectedPresetId, selectPreset } = useStylePresetStore();
   const { upsertJob, setActiveJob } = useGenerationJobStore();
   const { usableBalance } = useWalletBalances();
@@ -22,6 +23,7 @@ export default function StudioMobile() {
   const [billingError, setBillingError] = useState<string | null>(null);
   const [isMarketOpen, setIsMarketOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     void useAuthStore.getState().fetchWalletSummaries();
@@ -35,23 +37,35 @@ export default function StudioMobile() {
     return presets.filter((preset) => [preset.name, preset.description || '', ...(preset.tags || [])].join(' ').toLowerCase().includes(normalized)).slice(0, 6);
   }, [presets, query]);
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     try {
-      const mockUrl = URL.createObjectURL(file);
+      const dataUrl = await readFileAsDataURL(file);
       const newAsset = await assetService.registerAsset({
-        url: mockUrl,
-        type: 'original',
+        asset_type: 'source',
+        source_type: 'upload',
+        file_name: file.name,
+        source_url: dataUrl,
+        preview_url: dataUrl,
         mime_type: file.type,
-        size_bytes: file.size,
+        file_size: file.size,
         width: 1024,
         height: 1024,
       });
       addAsset(newAsset);
       selectAsset(newAsset.asset_id);
+      setInputMode('image_to_image');
       setStep(2);
     } catch (err) {
       console.error(err);
@@ -61,15 +75,20 @@ export default function StudioMobile() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !selectedPresetId) return;
+    if (!selectedAssetId || !promptDraft.trim()) return;
     setGenerating(true);
     setBillingError(null);
     try {
       const job = await generationJobService.createJob({
         mode: 'single',
-        style_preset_id: selectedPresetId,
+        input_mode: 'image_to_image',
+        style_preset_id: selectedPresetId || undefined,
         source_asset_ids: [selectedAssetId],
+        prompt: promptDraft.trim(),
         requested_variants: 4,
+        params: {
+          prompt: promptDraft.trim(),
+        },
       });
       upsertJob(job);
       setActiveJob(job.job_id);
@@ -77,6 +96,7 @@ export default function StudioMobile() {
     } catch (err: any) {
       console.error(err);
       const errorCode = err?.response?.data?.error_code || err?.error_code;
+      const fallbackMessage = err?.message || t('studio.billing.unknown_error');
       switch (errorCode) {
         case StudioBillingErrorCode.ALLOWANCE_INSUFFICIENT:
         case StudioBillingErrorCode.CREDITS_INSUFFICIENT:
@@ -93,7 +113,7 @@ export default function StudioMobile() {
           setBillingError(t('studio.billing.create_failed'));
           break;
         default:
-          setBillingError(t('studio.billing.unknown_error'));
+          setBillingError(fallbackMessage);
       }
     } finally {
       setGenerating(false);
@@ -109,9 +129,9 @@ export default function StudioMobile() {
         <header className="sticky top-0 z-30 border-b border-white/5 bg-black/35 backdrop-blur-2xl">
           <div className="px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <Link to="/" className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] text-white/70">
+              <button onClick={handleBack} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] text-white/70">
                 <ArrowLeft className="h-4 w-4" />
-              </Link>
+              </button>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">{step === 1 ? t('studio.step1.title') : step === 2 ? t('studio.step2.title') : t('studio.step3.title')}</p>
               </div>
@@ -136,7 +156,7 @@ export default function StudioMobile() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <MobileStat label={t('studio.panel.baseImage', { defaultValue: 'Base image' })} value={selectedAsset ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.missing', { defaultValue: 'Required' })} />
-              <MobileStat label={t('studio.panel.style', { defaultValue: 'Style preset' })} value={selectedPreset ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.missing', { defaultValue: 'Required' })} />
+              <MobileStat label={t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })} value={selectedPreset ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.optional', { defaultValue: 'Optional' })} />
             </div>
           </div>
 
@@ -167,10 +187,20 @@ export default function StudioMobile() {
               )}
 
               <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-4">
+                <div>
+                  <h3 className="text-base font-black text-white">{t('studio.panel.customPrompt', { defaultValue: 'Custom Prompt' })}</h3>
+                  <p className="text-sm text-gray-400">{t('studio.prompt.imageToImageHelp', { defaultValue: '输入你希望在原图基础上做的具体改造，风格预设只是可选增强。' })}</p>
+                </div>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  placeholder={t('studio.prompt.imageToImagePlaceholder', { defaultValue: '描述希望保留的主体、要替换的元素、风格、光线和构图...' })}
+                  className="h-28 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white placeholder:text-white/25 outline-none focus:border-purple-400/25"
+                />
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-black text-white">{t('studio.step2.title')}</h3>
-                    <p className="text-sm text-gray-400">{t('studio.step2.desc')}</p>
+                    <h3 className="text-base font-black text-white">{t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })}</h3>
+                    <p className="text-sm text-gray-400">{t('studio.market.optionalHint', { defaultValue: '可以直接生成，需要更强风格化时再选风格市场。' })}</p>
                   </div>
                   <button onClick={() => setIsMarketOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/70">
                     <LayoutGrid className="h-4 w-4" />
@@ -213,7 +243,7 @@ export default function StudioMobile() {
                 {billingError && <p className="mt-3 text-sm text-red-400">{billingError}</p>}
                 <button
                   onClick={handleGenerate}
-                  disabled={!selectedAssetId || !selectedPresetId || generating}
+                  disabled={!selectedAssetId || !promptDraft.trim() || generating}
                   className="mt-4 btn-primary inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-bold disabled:opacity-60"
                 >
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}

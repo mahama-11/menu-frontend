@@ -1,15 +1,9 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Clock3, Library, Palette, Settings, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, BadgePercent, Clock3, Library, Palette, Settings, Sparkles, Users } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from './copy';
-
-const quickLinks = [
-  { to: '/studio', titleKey: 'dash.home.studioTitle', descKey: 'dash.action.generate.desc', icon: <Sparkles className="h-5 w-5" />, accentClass: 'dashboard-accent-studio' },
-  { to: '/dashboard/library', titleKey: 'dash.home.libraryTitle', descKey: 'dash.home.libraryDesc', icon: <Library className="h-5 w-5" />, accentClass: 'dashboard-accent-library' },
-  { to: '/dashboard/history', titleKey: 'dash.nav.history', descKey: 'dash.recentActivity', icon: <Clock3 className="h-5 w-5" />, accentClass: 'dashboard-accent-neutral' },
-];
 
 export default function DashboardHomePage() {
   const { lang } = useI18n();
@@ -21,8 +15,17 @@ export default function DashboardHomePage() {
   const resetDate = useDashboardStore((state) => state.resetDate);
   const activityLog = useDashboardStore((state) => state.activityLog);
   const permissions = user?.access?.menu_permissions || [];
-  const hasReferralAccess = permissions.includes('menu.referral.read');
+  const hasReferralAccess = permissions.includes('menu.referral.read') || permissions.includes('menu.referral.manage');
+  const hasChannelAccess = permissions.includes('menu.channel.read') || permissions.includes('menu.channel.manage');
   const creditPercent = Math.min(100, Math.max(0, (credits / Math.max(maxCredits, 1)) * 100));
+  const quickLinks = [
+    { to: '/studio', titleKey: 'dash.home.studioTitle', descKey: 'dash.action.generate.desc', icon: <Sparkles className="h-5 w-5" />, accentClass: 'dashboard-accent-studio' },
+    { to: '/dashboard/library', titleKey: 'dash.home.libraryTitle', descKey: 'dash.home.libraryDesc', icon: <Library className="h-5 w-5" />, accentClass: 'dashboard-accent-library' },
+    { to: '/dashboard/history', titleKey: 'dash.nav.history', descKey: 'dash.recentActivity', icon: <Clock3 className="h-5 w-5" />, accentClass: 'dashboard-accent-neutral' },
+    ...(hasChannelAccess
+      ? [{ to: '/dashboard/channel', titleKey: 'dash.route.channel', descKey: 'dash.home.channelDesc', icon: <BadgePercent className="h-5 w-5" />, accentClass: 'dashboard-accent-cyan' }]
+      : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -98,6 +101,21 @@ export default function DashboardHomePage() {
                 </div>
                 <div className="dashboard-accent-studio flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
                   <Users className="h-5 w-5" />
+                </div>
+              </div>
+            </Link>
+          )}
+
+          {hasChannelAccess && (
+            <Link to="/dashboard/channel" className="dashboard-surface interactive-panel block rounded-[28px] p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="dashboard-kicker text-cyan-100/70">{tDash('dash.route.channel')}</p>
+                  <h3 className="mt-2 text-xl font-black text-white">{tDash('dash.home.channelTitle')}</h3>
+                  <p className="dashboard-copy mt-2 text-sm">{tDash('dash.home.channelDesc')}</p>
+                </div>
+                <div className="dashboard-accent-cyan flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+                  <BadgePercent className="h-5 w-5" />
                 </div>
               </div>
             </Link>
