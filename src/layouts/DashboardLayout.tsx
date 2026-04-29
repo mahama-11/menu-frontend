@@ -4,10 +4,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { BadgePercent, BookTemplate, Library, Menu, Settings, Sparkles, User, Users, WalletCards, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
+import { useCommercialStore } from '@/store/commercialStore';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from '@/pages/dashboard/copy';
-import { commercialService } from '@/services/commercial';
-import type { CommercialOrderView } from '@/types/commercial';
+import { formatMenuPlanLabel } from '@/lib/commercialPlan';
 
 type NavItem = {
   to: string;
@@ -26,32 +26,15 @@ export default function DashboardLayout() {
   const walletSummaries = useAuthStore((state) => state.walletSummaries);
   const quotaSummary = useAuthStore((state) => state.quotaSummary);
   const legacyPlan = useDashboardStore((state) => state.plan);
+  const latestSubscription = useCommercialStore((state) => state.latestSubscription);
+  const fetchCommercialContext = useCommercialStore((state) => state.fetchCommercialContext);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [latestSubscription, setLatestSubscription] = useState<CommercialOrderView | null>(null);
 
   useEffect(() => {
     void useDashboardStore.getState().fetchDashboardData();
     void useAuthStore.getState().fetchWalletSummaries();
-    let cancelled = false;
-    commercialService.listOrders()
-      .then((result) => {
-        if (cancelled) return;
-        const active = (result.items || [])
-          .filter((item) => item.order?.status === 'fulfilled' && item.order?.package_type === 'subscription')
-          .sort((a, b) => {
-            const aTime = new Date(a.order?.fulfilled_at || a.order?.updated_at || a.order?.created_at || 0).getTime();
-            const bTime = new Date(b.order?.fulfilled_at || b.order?.updated_at || b.order?.created_at || 0).getTime();
-            return bTime - aTime;
-          })[0] || null;
-        setLatestSubscription(active);
-      })
-      .catch(() => {
-        if (!cancelled) setLatestSubscription(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void fetchCommercialContext();
+  }, [fetchCommercialContext]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -75,13 +58,9 @@ export default function DashboardLayout() {
   const promoSummary = walletSummaries?.find((item) => item.asset_code === 'MENU_PROMO_CREDIT')?.total_balance || 0;
   const spendableCredits = allowanceSummary + creditSummary + promoSummary;
   const sidebarCredits = spendableCredits;
-  const sidebarPlan = latestSubscription?.order?.package_code?.includes('.basic.')
-    ? 'Basic'
-    : latestSubscription?.order?.package_code?.includes('.pro.')
-      ? 'Pro'
-      : latestSubscription?.order?.package_code?.includes('.growth.')
-        ? 'Growth'
-        : legacyPlan;
+  const sidebarPlan = latestSubscription?.order?.package_code
+    ? formatMenuPlanLabel(latestSubscription.order.package_code)
+    : formatMenuPlanLabel(legacyPlan);
 
   const navItems = useMemo<NavItem[]>(() => ([
     { to: '/dashboard', key: 'dash.nav.home', icon: <Sparkles className="h-4 w-4" /> },

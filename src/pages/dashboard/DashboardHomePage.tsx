@@ -1,28 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BadgePercent, BookTemplate, Clock3, CreditCard, Library, PackageCheck, Palette, Settings, Sparkles, Users, Wallet } from 'lucide-react';
 import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
+import { useCommercialStore } from '@/store/commercialStore';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from './copy';
-import { commercialService } from '@/services/commercial';
-import type { CommercialOrderView } from '@/types/commercial';
+import { formatMenuPlanLabel } from '@/lib/commercialPlan';
 
 function dashboardMoneyLabel(lang: string, cents: number): string {
   const amount = (cents || 0) / 100;
   if (lang === 'zh') return `¥${amount.toLocaleString()}`;
   if (lang === 'th') return `¥${amount.toLocaleString()}`;
   return `¥${amount.toLocaleString()}`;
-}
-
-function formatPackageName(packageCode: string, lang: string): string {
-  if (!packageCode) {
-    return lang === 'zh' ? '暂无套餐' : lang === 'th' ? 'ยังไม่มีแพ็กเกจ' : 'No active package';
-  }
-  if (packageCode.includes('.basic.')) return 'Basic';
-  if (packageCode.includes('.pro.')) return 'Pro';
-  if (packageCode.includes('.growth.')) return 'Growth';
-  return packageCode;
 }
 
 export default function DashboardHomePage() {
@@ -32,9 +22,10 @@ export default function DashboardHomePage() {
   const fetchWalletSummaries = useAuthStore((state) => state.fetchWalletSummaries);
   const legacyPlan = useDashboardStore((state) => state.plan);
   const activityLog = useDashboardStore((state) => state.activityLog);
+  const orders = useCommercialStore((state) => state.orders);
+  const latestSubscription = useCommercialStore((state) => state.latestSubscription);
+  const fetchCommercialContext = useCommercialStore((state) => state.fetchCommercialContext);
   const { cash, quota, promoCredits, credits: walletCredits, quotaSummary } = useWalletBalances();
-  const [orders, setOrders] = useState<CommercialOrderView[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(true);
   const permissions = user?.access?.menu_permissions || [];
   const hasReferralAccess = permissions.includes('menu.referral.read') || permissions.includes('menu.referral.manage');
   const hasChannelAccess = permissions.includes('menu.channel.read') || permissions.includes('menu.channel.manage');
@@ -50,37 +41,16 @@ export default function DashboardHomePage() {
 
   useEffect(() => {
     void fetchWalletSummaries(true);
-    let cancelled = false;
-    commercialService.listOrders()
-      .then((result) => {
-        if (!cancelled) setOrders(result.items || []);
-      })
-      .catch((error) => {
-        console.error('Failed to load commercial orders:', error);
-      })
-      .finally(() => {
-        if (!cancelled) setOrdersLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchWalletSummaries]);
-
-  const activeSubscription = useMemo(() => {
-    return [...orders]
-      .filter((item) => item.order?.status === 'fulfilled' && item.order?.package_type === 'subscription')
-      .sort((a, b) => {
-        const aTime = new Date(a.order?.fulfilled_at || a.order?.updated_at || a.order?.created_at || 0).getTime();
-        const bTime = new Date(b.order?.fulfilled_at || b.order?.updated_at || b.order?.created_at || 0).getTime();
-        return bTime - aTime;
-      })[0];
-  }, [orders]);
+    void fetchCommercialContext();
+  }, [fetchCommercialContext, fetchWalletSummaries]);
 
   const recentOrders = useMemo(() => orders.slice(0, 3), [orders]);
   const realSpendableCredits = quota + promoCredits + walletCredits;
-  const currentPlanName = activeSubscription?.order?.package_code ? formatPackageName(activeSubscription.order.package_code, lang) : legacyPlan;
+  const currentPlanName = latestSubscription?.order?.package_code
+    ? formatMenuPlanLabel(latestSubscription.order.package_code)
+    : formatMenuPlanLabel(legacyPlan);
   const currentCredits = realSpendableCredits;
-  const currentMaxCredits = quotaSummary?.granted || activeSubscription?.fulfillment?.amount || 0;
+  const currentMaxCredits = quotaSummary?.granted || latestSubscription?.fulfillment?.amount || 0;
   const currentCreditPercent = Math.min(100, Math.max(0, (currentCredits / Math.max(currentMaxCredits, 1)) * 100));
 
   return (
@@ -174,14 +144,18 @@ export default function DashboardHomePage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="dashboard-kicker text-primary-200/80">{lang === 'zh' ? '当前套餐' : lang === 'th' ? 'แพ็กเกจปัจจุบัน' : 'Current Package'}</p>
-                <h3 className="mt-2 text-2xl font-black text-white">{formatPackageName(activeSubscription?.order?.package_code || '', lang)}</h3>
+                <h3 className="mt-2 text-2xl font-black text-white">
+                  {latestSubscription?.order?.package_code
+                    ? formatMenuPlanLabel(latestSubscription.order.package_code)
+                    : formatMenuPlanLabel(legacyPlan)}
+                </h3>
                 <p className="mt-2 text-sm text-white/55">
-                  {activeSubscription?.order
+                  {latestSubscription?.order
                     ? (lang === 'zh'
-                        ? `实付 ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)}，状态 ${activeSubscription.order.status}`
+                        ? `实付 ${dashboardMoneyLabel(lang, latestSubscription.order.total_amount)}，状态 ${latestSubscription.order.status}`
                         : lang === 'th'
-                          ? `ชำระแล้ว ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)} สถานะ ${activeSubscription.order.status}`
-                          : `Paid ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)}, status ${activeSubscription.order.status}`)
+                          ? `ชำระแล้ว ${dashboardMoneyLabel(lang, latestSubscription.order.total_amount)} สถานะ ${latestSubscription.order.status}`
+                          : `Paid ${dashboardMoneyLabel(lang, latestSubscription.order.total_amount)}, status ${latestSubscription.order.status}`)
                     : (lang === 'zh'
                         ? '当前还没有已生效的订阅套餐'
                         : lang === 'th'
@@ -201,8 +175,8 @@ export default function DashboardHomePage() {
               <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/35">{lang === 'zh' ? '最近生效时间' : lang === 'th' ? 'เวลาเริ่มใช้งานล่าสุด' : 'Latest activation'}</p>
                 <p className="mt-2 text-sm font-semibold text-white">
-                  {activeSubscription?.order?.fulfilled_at
-                    ? new Date(activeSubscription.order.fulfilled_at).toLocaleString()
+                  {latestSubscription?.order?.fulfilled_at
+                    ? new Date(latestSubscription.order.fulfilled_at).toLocaleString()
                     : (lang === 'zh' ? '暂无' : lang === 'th' ? 'ยังไม่มี' : 'N/A')}
                 </p>
               </div>
@@ -252,17 +226,13 @@ export default function DashboardHomePage() {
           </div>
         </div>
 
-        {ordersLoading ? (
-          <div className="mt-5 rounded-2xl border border-white/6 bg-black/20 px-4 py-10 text-center text-sm text-white/45">
-            {lang === 'zh' ? '正在加载购买记录...' : lang === 'th' ? 'กำลังโหลดประวัติการซื้อ...' : 'Loading purchase history...'}
-          </div>
-        ) : recentOrders.length > 0 ? (
+        {recentOrders.length > 0 ? (
           <div className="mt-5 grid gap-3">
             {recentOrders.map((item) => (
               <div key={item.order?.id || item.payment?.id} className="rounded-2xl border border-white/6 bg-black/20 px-4 py-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm font-bold text-white">{formatPackageName(item.order?.package_code || '', lang)}</p>
+                    <p className="text-sm font-bold text-white">{formatMenuPlanLabel(item.order?.package_code || '')}</p>
                     <p className="mt-1 text-xs text-white/45">
                       {item.order?.created_at ? new Date(item.order.created_at).toLocaleString() : ''}
                     </p>

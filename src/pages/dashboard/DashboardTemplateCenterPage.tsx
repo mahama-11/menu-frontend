@@ -16,8 +16,10 @@ import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from './copy';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useAuthStore } from '@/store/authStore';
+import { useCommercialStore } from '@/store/commercialStore';
 import { useToastStore } from '@/store/toastStore';
 import { buildStudioLaunchPayload, templateCenterService } from '@/services/templateCenter';
+import { formatMenuPlanLabel, resolveEffectiveMenuPlan } from '@/lib/commercialPlan';
 import type {
   ListTemplateCatalogsParams,
   TemplateCatalogDetail,
@@ -41,12 +43,15 @@ export default function DashboardTemplateCenterPage() {
   const { templateId: templateIdParam } = useParams<{ templateId?: string }>();
   const { lang } = useI18n();
   const tDash = useCallback((key: string) => getDashboardText(lang, key), [lang]);
-  const plan = useDashboardStore((state) => state.plan);
+  const legacyPlan = useDashboardStore((state) => state.plan);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const latestSubscription = useCommercialStore((state) => state.latestSubscription);
+  const fetchCommercialContext = useCommercialStore((state) => state.fetchCommercialContext);
   const showToast = useToastStore((state) => state.showToast);
   const isPublicRoute = !location.pathname.startsWith('/dashboard');
 
-  const normalizedPlan = normalizePlan(plan);
+  const effectivePlan = resolveEffectiveMenuPlan(latestSubscription?.order?.package_code, legacyPlan);
+  const shouldSendPlanHint = isPublicRoute && !isAuthenticated;
   const detailRequestRef = useRef(0);
   const detailPanelRef = useRef<HTMLElement | null>(null);
 
@@ -65,6 +70,11 @@ export default function DashboardTemplateCenterPage() {
   const [filters, setFilters] = useState<ListTemplateCatalogsParams>({});
   const [onlyFavorites, setOnlyFavorites] = useState(false);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void fetchCommercialContext();
+  }, [fetchCommercialContext, isAuthenticated]);
+
   const loadMeta = useCallback(async () => {
     try {
       const result = await templateCenterService.getMeta();
@@ -81,12 +91,12 @@ export default function DashboardTemplateCenterPage() {
       return;
     }
     try {
-      const favorites = await templateCenterService.listFavorites(normalizedPlan);
+      const favorites = await templateCenterService.listFavorites(effectivePlan);
       setFavoriteIds(new Set(favorites.map((item) => item.template_id)));
     } catch (error) {
       console.error(error);
     }
-  }, [isAuthenticated, normalizedPlan]);
+  }, [effectivePlan, isAuthenticated]);
 
   const loadCatalogs = useCallback(async () => {
     setLoading(true);
@@ -94,7 +104,7 @@ export default function DashboardTemplateCenterPage() {
       const result = await templateCenterService.listCatalogs({
         ...filters,
         query: filters.query?.trim() || undefined,
-        plan: normalizedPlan,
+        plan: shouldSendPlanHint ? effectivePlan : undefined,
       });
       const items = Array.isArray(result) ? result : [];
       setCatalogs(items);
@@ -113,7 +123,7 @@ export default function DashboardTemplateCenterPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters, normalizedPlan, showToast, tDash, templateIdParam]);
+  }, [effectivePlan, filters, shouldSendPlanHint, showToast, tDash, templateIdParam]);
 
   useEffect(() => {
     void Promise.all([loadMeta(), loadFavorites()]);
@@ -142,7 +152,7 @@ export default function DashboardTemplateCenterPage() {
     detailRequestRef.current = requestId;
     setDetailLoading(true);
 
-    void templateCenterService.getCatalogDetail(selectedTemplateId, normalizedPlan)
+    void templateCenterService.getCatalogDetail(selectedTemplateId, shouldSendPlanHint ? effectivePlan : undefined)
       .then((result) => {
         if (detailRequestRef.current !== requestId) return;
         setDetail(result);
@@ -163,7 +173,7 @@ export default function DashboardTemplateCenterPage() {
           setDetailLoading(false);
         }
       });
-  }, [normalizedPlan, selectedTemplateId, showToast, tDash]);
+  }, [effectivePlan, selectedTemplateId, shouldSendPlanHint, showToast, tDash]);
 
   const visibleCatalogs = useMemo(() => {
     if (!onlyFavorites) return catalogs;
@@ -321,7 +331,7 @@ export default function DashboardTemplateCenterPage() {
             />
             <MetricCard
               label={tDash('dash.templateCenter.stats.plan')}
-              value={plan || 'Basic'}
+              value={formatMenuPlanLabel(latestSubscription?.order?.package_code || legacyPlan)}
               hint={tDash('dash.templateCenter.stats.planHint')}
             />
           </div>
@@ -795,11 +805,4 @@ function platformSummary(platforms: string[], labels: Record<string, string>) {
   if (platforms.length === 0) return 'Template';
   if (platforms.length === 1) return labelFor(platforms[0], labels);
   return `${labelFor(platforms[0], labels)} +${platforms.length - 1}`;
-}
-
-function normalizePlan(plan: string) {
-  const value = String(plan || '').trim().toLowerCase();
-  if (value.includes('growth')) return 'growth';
-  if (value.includes('pro')) return 'pro';
-  return 'basic';
 }

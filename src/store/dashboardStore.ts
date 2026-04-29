@@ -62,6 +62,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
 
         set({
+          plan: profileRes.plan || get().plan,
           profileName: profileRes.name || '',
           profileRestaurantName: profileRes.restaurant_name || '',
           activityLog: activitiesRes?.activities || [],

@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '@/hooks/useI18n';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { useCommercialStore } from '@/store/commercialStore';
 import { useToastStore } from '@/store/toastStore';
 import { commercialService } from '@/services/commercial';
 import type { CommercialAllowancePolicy, CommercialOfferingsResponse, CommercialOrderView, CommercialPackage, CommercialRateCard, CommercialSKU } from '@/types/commercial';
@@ -209,6 +210,7 @@ export default function Landing() {
   const [orders, setOrders] = useState<CommercialOrderView[]>([]);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const fetchWalletSummaries = useAuthStore((state) => state.fetchWalletSummaries);
+  const fetchCommercialContext = useCommercialStore((state) => state.fetchCommercialContext);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -317,6 +319,7 @@ export default function Landing() {
         provider_code: 'platform_wallet',
       });
       await fetchWalletSummaries(true);
+      await fetchCommercialContext(true);
       const latestOrders = await commercialService.listOrders();
       setOrders(latestOrders.items || []);
       showToast(

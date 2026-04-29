@@ -12,7 +12,7 @@ import WorkspaceShowcase from './WorkspaceShowcase';
 
 export default function WorkspaceCanvas({ compactHeader = false }: { compactHeader?: boolean }) {
   const { t } = useTranslation();
-  const { activeJobId, jobs, upsertJob, stopPolling, setActiveJob } = useGenerationJobStore();
+  const { activeJobId, jobs, upsertJob } = useGenerationJobStore();
   const { selectVariant, selectedVariantId } = useVariantSelectionStore();
   const { showToast } = useToastStore();
   const { reuseResultAsBase, clearJobContext } = useStudioSessionActions();

@@ -5,6 +5,7 @@ import { useAssetStore } from '@/store/studioStore';
 import { stylePresetService } from '@/services/studio';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
+import { useCommercialStore } from '@/store/commercialStore';
 import { buildTemplateCatalogCreativeSource } from '@/utils/studioCreativeSource';
 import { prepareStudioTemplateLaunch, templateCenterService } from '@/services/templateCenter';
 import { useI18n } from '@/hooks/useI18n';
@@ -27,8 +28,8 @@ export default function Studio() {
   } = useStylePresetStore();
   const { setPromptDraft, setInputMode } = useAssetStore();
   const { lang } = useI18n();
-  const plan = useDashboardStore(state => state.plan);
   const fetchDashboardData = useDashboardStore(state => state.fetchDashboardData);
+  const fetchCommercialContext = useCommercialStore(state => state.fetchCommercialContext);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isLoading = useAuthStore(state => state.isLoading);
   const location = useLocation();
@@ -55,7 +56,8 @@ export default function Studio() {
   useEffect(() => {
     if (!isAuthenticated) return;
     void fetchDashboardData();
-  }, [fetchDashboardData, isAuthenticated]);
+    void fetchCommercialContext();
+  }, [fetchCommercialContext, fetchDashboardData, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -64,7 +66,7 @@ export default function Studio() {
     async function loadOfficialTemplates() {
       setOfficialTemplatesLoading(true);
       try {
-        const items = await templateCenterService.listCatalogs({ plan: normalizePlan(plan) });
+        const items = await templateCenterService.listCatalogs();
         if (!alive) return;
         setOfficialTemplates(items.map(buildTemplateCatalogCreativeSource));
       } catch (err) {
@@ -80,7 +82,7 @@ export default function Studio() {
     return () => {
       alive = false;
     };
-  }, [isAuthenticated, plan, setOfficialTemplates, setOfficialTemplatesLoading]);
+  }, [isAuthenticated, setOfficialTemplates, setOfficialTemplatesLoading]);
 
   useEffect(() => {
     const payload = (location.state as { templateLaunch?: TemplateStudioLaunchPayload } | null)?.templateLaunch;
@@ -118,7 +120,6 @@ export default function Studio() {
       templateId,
       targetPlatform: selectedTemplate.target_platform || selectedTemplate.available_platforms?.[0],
       language: lang,
-      plan: normalizePlan(plan),
     })
       .then((payload) => {
         upsertOfficialTemplate(payload);
@@ -131,7 +132,7 @@ export default function Studio() {
       .finally(() => {
         hydratingTemplatesRef.current.delete(templateId);
       });
-  }, [lang, officialTemplates, plan, selectedSourceKey, setInputMode, setPromptDraft, upsertOfficialTemplate]);
+  }, [lang, officialTemplates, selectedSourceKey, setInputMode, setPromptDraft, upsertOfficialTemplate]);
 
   if (!isLoading && !isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
@@ -142,11 +143,4 @@ export default function Studio() {
   }
 
   return <StudioLayout />;
-}
-
-function normalizePlan(plan: string) {
-  const value = String(plan || '').trim().toLowerCase();
-  if (value.includes('growth')) return 'growth';
-  if (value.includes('pro')) return 'pro';
-  return 'basic';
 }
