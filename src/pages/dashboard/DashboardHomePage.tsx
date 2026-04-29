@@ -1,31 +1,87 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgePercent, Clock3, Library, Palette, Settings, Sparkles, Users } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import { ArrowRight, BadgePercent, BookTemplate, Clock3, CreditCard, Library, PackageCheck, Palette, Settings, Sparkles, Users, Wallet } from 'lucide-react';
+import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from './copy';
+import { commercialService } from '@/services/commercial';
+import type { CommercialOrderView } from '@/types/commercial';
+
+function dashboardMoneyLabel(lang: string, cents: number): string {
+  const amount = (cents || 0) / 100;
+  if (lang === 'zh') return `¥${amount.toLocaleString()}`;
+  if (lang === 'th') return `¥${amount.toLocaleString()}`;
+  return `¥${amount.toLocaleString()}`;
+}
+
+function formatPackageName(packageCode: string, lang: string): string {
+  if (!packageCode) {
+    return lang === 'zh' ? '暂无套餐' : lang === 'th' ? 'ยังไม่มีแพ็กเกจ' : 'No active package';
+  }
+  if (packageCode.includes('.basic.')) return 'Basic';
+  if (packageCode.includes('.pro.')) return 'Pro';
+  if (packageCode.includes('.growth.')) return 'Growth';
+  return packageCode;
+}
 
 export default function DashboardHomePage() {
   const { lang } = useI18n();
   const tDash = (key: string) => getDashboardText(lang, key);
   const user = useAuthStore((state) => state.user);
-  const credits = useDashboardStore((state) => state.credits);
-  const maxCredits = useDashboardStore((state) => state.maxCredits);
-  const plan = useDashboardStore((state) => state.plan);
-  const resetDate = useDashboardStore((state) => state.resetDate);
+  const fetchWalletSummaries = useAuthStore((state) => state.fetchWalletSummaries);
+  const legacyPlan = useDashboardStore((state) => state.plan);
   const activityLog = useDashboardStore((state) => state.activityLog);
+  const { cash, quota, promoCredits, credits: walletCredits, quotaSummary } = useWalletBalances();
+  const [orders, setOrders] = useState<CommercialOrderView[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const permissions = user?.access?.menu_permissions || [];
   const hasReferralAccess = permissions.includes('menu.referral.read') || permissions.includes('menu.referral.manage');
   const hasChannelAccess = permissions.includes('menu.channel.read') || permissions.includes('menu.channel.manage');
-  const creditPercent = Math.min(100, Math.max(0, (credits / Math.max(maxCredits, 1)) * 100));
   const quickLinks = [
     { to: '/studio', titleKey: 'dash.home.studioTitle', descKey: 'dash.action.generate.desc', icon: <Sparkles className="h-5 w-5" />, accentClass: 'dashboard-accent-studio' },
+    { to: '/dashboard/templates', titleKey: 'dash.home.templateTitle', descKey: 'dash.home.templateDesc', icon: <BookTemplate className="h-5 w-5" />, accentClass: 'dashboard-accent-primary' },
     { to: '/dashboard/library', titleKey: 'dash.home.libraryTitle', descKey: 'dash.home.libraryDesc', icon: <Library className="h-5 w-5" />, accentClass: 'dashboard-accent-library' },
     { to: '/dashboard/history', titleKey: 'dash.nav.history', descKey: 'dash.recentActivity', icon: <Clock3 className="h-5 w-5" />, accentClass: 'dashboard-accent-neutral' },
     ...(hasChannelAccess
       ? [{ to: '/dashboard/channel', titleKey: 'dash.route.channel', descKey: 'dash.home.channelDesc', icon: <BadgePercent className="h-5 w-5" />, accentClass: 'dashboard-accent-cyan' }]
       : []),
   ];
+
+  useEffect(() => {
+    void fetchWalletSummaries(true);
+    let cancelled = false;
+    commercialService.listOrders()
+      .then((result) => {
+        if (!cancelled) setOrders(result.items || []);
+      })
+      .catch((error) => {
+        console.error('Failed to load commercial orders:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setOrdersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchWalletSummaries]);
+
+  const activeSubscription = useMemo(() => {
+    return [...orders]
+      .filter((item) => item.order?.status === 'fulfilled' && item.order?.package_type === 'subscription')
+      .sort((a, b) => {
+        const aTime = new Date(a.order?.fulfilled_at || a.order?.updated_at || a.order?.created_at || 0).getTime();
+        const bTime = new Date(b.order?.fulfilled_at || b.order?.updated_at || b.order?.created_at || 0).getTime();
+        return bTime - aTime;
+      })[0];
+  }, [orders]);
+
+  const recentOrders = useMemo(() => orders.slice(0, 3), [orders]);
+  const realSpendableCredits = quota + promoCredits + walletCredits;
+  const currentPlanName = activeSubscription?.order?.package_code ? formatPackageName(activeSubscription.order.package_code, lang) : legacyPlan;
+  const currentCredits = realSpendableCredits;
+  const currentMaxCredits = quotaSummary?.granted || activeSubscription?.fulfillment?.amount || 0;
+  const currentCreditPercent = Math.min(100, Math.max(0, (currentCredits / Math.max(currentMaxCredits, 1)) * 100));
 
   return (
     <div className="space-y-6">
@@ -77,18 +133,80 @@ export default function DashboardHomePage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="dashboard-kicker">{tDash('dash.credits')}</p>
-                <h2 className="mt-2 text-3xl font-black text-white">{credits}<span className="ml-2 text-base font-medium text-white/35">/ {maxCredits}</span></h2>
+                <h2 className="mt-2 text-3xl font-black text-white">{currentCredits}<span className="ml-2 text-base font-medium text-white/35">/ {currentMaxCredits}</span></h2>
               </div>
               <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
-                {plan}
+                {currentPlanName}
               </span>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/6">
-              <div className="h-full bg-gradient-to-r from-primary-500 via-violet-400 to-orange-400 transition-all duration-700" style={{ width: `${creditPercent}%` }} />
+              <div className="h-full bg-gradient-to-r from-primary-500 via-violet-400 to-orange-400 transition-all duration-700" style={{ width: `${currentCreditPercent}%` }} />
             </div>
             <p className="mt-3 text-xs text-white/40">
-              {resetDate ? `Resets ${new Date(resetDate).toLocaleDateString()}` : tDash('dash.creditReset')}
+              {lang === 'zh'
+                ? `已消费 ${quotaSummary?.consumed || 0}，预留 ${quotaSummary?.reserved || 0}`
+                : lang === 'th'
+                  ? `ใช้ไป ${quotaSummary?.consumed || 0} สำรอง ${quotaSummary?.reserved || 0}`
+                  : `Consumed ${quotaSummary?.consumed || 0}, reserved ${quotaSummary?.reserved || 0}`}
             </p>
+          </div>
+
+          <div className="dashboard-surface rounded-[28px] p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="dashboard-kicker text-emerald-200/80">{lang === 'zh' ? '支付余额' : lang === 'th' ? 'ยอดคงเหลือสำหรับชำระ' : 'Payment Balance'}</p>
+                <h3 className="mt-2 text-3xl font-black text-white">{dashboardMoneyLabel(lang, cash)}</h3>
+                <p className="mt-2 text-sm text-white/55">
+                  {lang === 'zh'
+                    ? '购买套餐时将直接从平台钱包扣款'
+                    : lang === 'th'
+                      ? 'เมื่อซื้อแพ็กเกจ ระบบจะหักเงินจากกระเป๋าแพลตฟอร์มโดยตรง'
+                      : 'Package purchases debit your platform wallet directly'}
+                </p>
+              </div>
+              <div className="dashboard-accent-cyan flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+                <Wallet className="h-5 w-5" />
+              </div>
+            </div>
+          </div>
+
+          <div className="dashboard-surface rounded-[28px] p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="dashboard-kicker text-primary-200/80">{lang === 'zh' ? '当前套餐' : lang === 'th' ? 'แพ็กเกจปัจจุบัน' : 'Current Package'}</p>
+                <h3 className="mt-2 text-2xl font-black text-white">{formatPackageName(activeSubscription?.order?.package_code || '', lang)}</h3>
+                <p className="mt-2 text-sm text-white/55">
+                  {activeSubscription?.order
+                    ? (lang === 'zh'
+                        ? `实付 ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)}，状态 ${activeSubscription.order.status}`
+                        : lang === 'th'
+                          ? `ชำระแล้ว ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)} สถานะ ${activeSubscription.order.status}`
+                          : `Paid ${dashboardMoneyLabel(lang, activeSubscription.order.total_amount)}, status ${activeSubscription.order.status}`)
+                    : (lang === 'zh'
+                        ? '当前还没有已生效的订阅套餐'
+                        : lang === 'th'
+                          ? 'ขณะนี้ยังไม่มีแพ็กเกจสมาชิกที่เริ่มใช้งานแล้ว'
+                          : 'No active subscription package yet')}
+                </p>
+              </div>
+              <div className="dashboard-accent-studio flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl">
+                <PackageCheck className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/35">{lang === 'zh' ? '剩余额度' : lang === 'th' ? 'โควตาคงเหลือ' : 'Remaining allowance'}</p>
+                <p className="mt-2 text-xl font-black text-white">{quota}</p>
+              </div>
+              <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/35">{lang === 'zh' ? '最近生效时间' : lang === 'th' ? 'เวลาเริ่มใช้งานล่าสุด' : 'Latest activation'}</p>
+                <p className="mt-2 text-sm font-semibold text-white">
+                  {activeSubscription?.order?.fulfilled_at
+                    ? new Date(activeSubscription.order.fulfilled_at).toLocaleString()
+                    : (lang === 'zh' ? '暂无' : lang === 'th' ? 'ยังไม่มี' : 'N/A')}
+                </p>
+              </div>
+            </div>
           </div>
 
           {hasReferralAccess && (
@@ -121,6 +239,57 @@ export default function DashboardHomePage() {
             </Link>
           )}
         </div>
+      </section>
+
+      <section className="dashboard-surface rounded-[28px] p-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="dashboard-kicker">{lang === 'zh' ? '已购套餐' : lang === 'th' ? 'แพ็กเกจที่ซื้อแล้ว' : 'Purchased Packages'}</p>
+            <h2 className="mt-2 text-xl font-black text-white">{lang === 'zh' ? '最近购买记录' : lang === 'th' ? 'ประวัติการซื้อล่าสุด' : 'Recent purchases'}</h2>
+          </div>
+          <div className="dashboard-accent-primary flex h-12 w-12 items-center justify-center rounded-2xl">
+            <CreditCard className="h-5 w-5" />
+          </div>
+        </div>
+
+        {ordersLoading ? (
+          <div className="mt-5 rounded-2xl border border-white/6 bg-black/20 px-4 py-10 text-center text-sm text-white/45">
+            {lang === 'zh' ? '正在加载购买记录...' : lang === 'th' ? 'กำลังโหลดประวัติการซื้อ...' : 'Loading purchase history...'}
+          </div>
+        ) : recentOrders.length > 0 ? (
+          <div className="mt-5 grid gap-3">
+            {recentOrders.map((item) => (
+              <div key={item.order?.id || item.payment?.id} className="rounded-2xl border border-white/6 bg-black/20 px-4 py-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">{formatPackageName(item.order?.package_code || '', lang)}</p>
+                    <p className="mt-1 text-xs text-white/45">
+                      {item.order?.created_at ? new Date(item.order.created_at).toLocaleString() : ''}
+                    </p>
+                  </div>
+                  <div className="text-sm font-semibold text-emerald-300">
+                    {dashboardMoneyLabel(lang, item.order?.total_amount || 0)}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-emerald-300">
+                    {lang === 'zh' ? `订单 ${item.order?.status || 'unknown'}` : lang === 'th' ? `คำสั่งซื้อ ${item.order?.status || 'unknown'}` : `Order ${item.order?.status || 'unknown'}`}
+                  </span>
+                  <span className="rounded-full border border-primary-400/20 bg-primary-400/10 px-3 py-1 text-primary-300">
+                    {lang === 'zh' ? `支付 ${item.order?.payment_status || 'unknown'}` : lang === 'th' ? `ชำระเงิน ${item.order?.payment_status || 'unknown'}` : `Payment ${item.order?.payment_status || 'unknown'}`}
+                  </span>
+                  <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-violet-300">
+                    {lang === 'zh' ? `履约 ${item.order?.fulfillment_status || 'unknown'}` : lang === 'th' ? `เริ่มใช้งาน ${item.order?.fulfillment_status || 'unknown'}` : `Fulfillment ${item.order?.fulfillment_status || 'unknown'}`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-white/6 bg-black/20 px-4 py-10 text-center text-sm text-white/45">
+            {lang === 'zh' ? '还没有购买记录，先去套餐页购买一个套餐。' : lang === 'th' ? 'ยังไม่มีประวัติการซื้อ ลองซื้อแพ็กเกจก่อน' : 'No purchases yet. Buy a package to get started.'}
+          </div>
+        )}
       </section>
 
       <section className="dashboard-surface rounded-[28px] p-6">

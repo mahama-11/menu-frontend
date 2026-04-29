@@ -1,5 +1,5 @@
 import { menuApiClient } from './api';
-import type { User, AuthResponse, CreditsSummary, AccessContext } from '@/types/auth';
+import type { User, AuthResponse, CreditsSummary, AccessContext, QuotaSummary } from '@/types/auth';
 
 export interface SessionResponse {
   authenticated: boolean;
@@ -58,6 +58,10 @@ export const authService = {
 
   getWalletSummary: async ():Promise<import('@/types/auth').WalletSummaryResponse> => {
     return menuApiClient.get('/user/wallet-summary') as unknown as import('@/types/auth').WalletSummaryResponse;
+  },
+
+  getQuotaSummary: async ():Promise<QuotaSummary> => {
+    return menuApiClient.get('/user/quota-summary') as unknown as QuotaSummary;
   },
 
   getProfile: async ():Promise<ProfileResponse> => {

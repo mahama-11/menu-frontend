@@ -59,6 +59,35 @@ export default function WalletHistory({ embedded = false }: WalletHistoryProps) 
     }
   };
 
+  const formatEntryAmount = (entry: WalletHistoryEntry) => {
+    const prefix = entry.direction === 'credit' ? '+' : entry.direction === 'debit' ? '-' : '';
+    if (entry.asset_code === 'MENU_CASH') {
+      return `${prefix}¥${(entry.amount / 100).toLocaleString()}`;
+    }
+    if (entry.asset_code === 'menu.render.call') {
+      return `${prefix}${entry.amount} quota`;
+    }
+    if (entry.asset_code === 'MENU_CREDIT' || entry.asset_code === 'MENU_PROMO_CREDIT') {
+      return `${prefix}${entry.amount} credits`;
+    }
+    return `${prefix}${entry.amount}`;
+  };
+
+  const formatEntryAssetLabel = (entry: WalletHistoryEntry) => {
+    switch (entry.asset_code) {
+      case 'MENU_CASH':
+        return 'Cash Balance';
+      case 'menu.render.call':
+        return 'Menu Quota';
+      case 'MENU_CREDIT':
+        return 'Permanent Credits';
+      case 'MENU_PROMO_CREDIT':
+        return 'Promo Credits';
+      default:
+        return entry.asset_code || entry.currency || entry.charge_mode || 'activity';
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -142,10 +171,10 @@ export default function WalletHistory({ embedded = false }: WalletHistoryProps) 
                   
                   <div className={`text-right ${entry.direction === 'credit' ? 'text-green-400' : 'text-orange-400'}`}>
                     <p className={`font-black text-2xl tracking-tight drop-shadow-md ${entry.direction === 'credit' ? 'shadow-green-500/20' : 'shadow-orange-500/20'}`}>
-                      {entry.direction === 'credit' ? '+' : entry.direction === 'debit' ? '-' : ''}{entry.amount}
+                      {formatEntryAmount(entry)}
                     </p>
                     <p className="text-[11px] opacity-60 uppercase tracking-widest font-bold mt-1">
-                      {entry.asset_code || entry.currency || entry.charge_mode || 'activity'}
+                      {formatEntryAssetLabel(entry)}
                     </p>
                   </div>
                 </div>

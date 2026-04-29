@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStylePresetStore } from '@/store/studioStore';
-import { Search, X, Sparkles, Filter, Check } from 'lucide-react';
+import { Search, X, Sparkles, Filter, Check, Loader2, Lock } from 'lucide-react';
+import { creativeSourceKey, findCreativeSourceByKey, listStudioCreativeSources } from '@/utils/studioCreativeSource';
 
 interface StyleMarketDrawerProps {
   isOpen: boolean;
@@ -10,37 +11,46 @@ interface StyleMarketDrawerProps {
 
 export default function StyleMarketDrawer({ isOpen, onClose }: StyleMarketDrawerProps) {
   const { t } = useTranslation();
-  const { presets, selectedPresetId, selectPreset } = useStylePresetStore();
+  const { presets, officialTemplates, officialTemplatesLoading, selectedSourceKey, selectPreset, selectOfficialTemplate } = useStylePresetStore();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
 
+  const allSources = useMemo(() => listStudioCreativeSources(presets, officialTemplates), [officialTemplates, presets]);
+
   const categories = useMemo(() => {
     const pool = new Set<string>();
-    presets.forEach((preset) => {
-      preset.tags?.forEach((tag) => pool.add(tag));
-      preset.dimensions?.forEach((dimension) => pool.add(dimension.label || dimension.key));
+    allSources.forEach((source) => {
+      source.tags?.forEach((tag) => pool.add(tag));
+      source.dimensions?.forEach((dimension) => pool.add(dimension.label || dimension.key));
     });
     return ['all', ...Array.from(pool).slice(0, 5)];
-  }, [presets]);
+  }, [allSources]);
 
-  const filteredPresets = useMemo(() => {
+  const filteredSources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return presets.filter((preset) => {
-      const matchesQuery = !normalizedQuery || [preset.name, preset.description || '', ...(preset.tags || [])]
+    return allSources.filter((source) => {
+      const matchesQuery = !normalizedQuery || [source.title, source.description || '', ...(source.tags || [])]
         .join(' ')
         .toLowerCase()
         .includes(normalizedQuery);
 
-      const presetLabels = [
-        ...(preset.tags || []),
-        ...(preset.dimensions || []).map((dimension) => dimension.label || dimension.key),
+      const sourceLabels = [
+        ...(source.tags || []),
+        ...(source.dimensions || []).map((dimension) => dimension.label || dimension.key),
       ];
-      const matchesCategory = category === 'all' || presetLabels.includes(category);
+      const matchesCategory = category === 'all' || sourceLabels.includes(category);
       return matchesQuery && matchesCategory;
     });
-  }, [category, presets, query]);
+  }, [allSources, category, query]);
 
-  const selectedPreset = presets.find((preset) => preset.style_preset_id === selectedPresetId);
+  const selectedSource = useMemo(
+    () => findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey),
+    [officialTemplates, presets, selectedSourceKey],
+  );
+
+  const officialSourceCount = officialTemplates.length;
+  const filteredOfficialTemplates = filteredSources.filter((item) => item.source_type === 'template');
+  const filteredStylePresets = filteredSources.filter((item) => item.source_type === 'style_preset');
 
   return (
     <>
@@ -104,67 +114,143 @@ export default function StyleMarketDrawer({ isOpen, onClose }: StyleMarketDrawer
             </div>
           </div>
 
-          {selectedPreset && (
+          {selectedSource && (
             <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{t('studio.market.selected', { defaultValue: 'Selected style' })}</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{t('studio.market.selected', { defaultValue: 'Selected source' })}</p>
               <div className="mt-3 flex items-center gap-3">
-                <img src={selectedPreset.preview_url || `https://picsum.photos/seed/${selectedPreset.style_preset_id}/120/120`} alt={selectedPreset.name} className="h-14 w-14 rounded-xl object-cover" />
+                <img src={selectedSource.preview_url || `https://picsum.photos/seed/${selectedSource.source_id}/120/120`} alt={selectedSource.title} className="h-14 w-14 rounded-xl object-cover" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-white">{selectedPreset.name}</p>
-                  <p className="mt-1 truncate text-xs text-gray-400">{selectedPreset.description || t('studio.market.selectedHint', { defaultValue: 'Ready to be used in your next generation.' })}</p>
+                  <p className="truncate text-sm font-black text-white">{selectedSource.title}</p>
+                  <p className="mt-1 truncate text-xs text-gray-400">{selectedSource.description || t('studio.market.selectedHint', { defaultValue: 'Ready to be used in your next generation.' })}</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.16em] text-orange-200/70">{selectedSource.badge_label || selectedSource.source_type}</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="p-6 overflow-y-auto h-[calc(100%-250px)] space-y-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent">
-          {filteredPresets.length === 0 ? (
+        <div className="h-[calc(100%-250px)] space-y-4 overflow-y-auto p-6">
+          {officialTemplatesLoading ? (
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-8 text-center text-sm text-gray-400">
+              <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-orange-300" />
+              {t('studio.market.loadingOfficialTemplates', { defaultValue: 'Loading official templates...' })}
+            </div>
+          ) : filteredSources.length === 0 ? (
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-8 text-center text-sm text-gray-400">
               {t('studio.market.empty', { defaultValue: 'No styles match this search yet.' })}
             </div>
           ) : (
-            filteredPresets.map((preset, index) => (
-              <button
-                key={preset.style_preset_id}
-                onClick={() => {
-                  selectPreset(preset.style_preset_id);
-                  onClose();
-                }}
-                className="interactive-panel interactive-panel-purple group relative w-full text-left overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.05] animate-slide-up"
-                style={{ animationDelay: `${index * 40}ms` }}
-              >
-                <div className="relative h-40 overflow-hidden">
-                  <img
-                    src={preset.preview_url || `https://picsum.photos/seed/${preset.style_preset_id}/400/300`}
-                    alt={preset.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-                  {selectedPresetId === preset.style_preset_id && (
-                    <div className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_0_16px_rgba(249,115,22,0.45)]">
-                      <Check className="w-4 h-4" />
-                    </div>
-                  )}
+            <>
+              {filteredOfficialTemplates.length > 0 && (
+                <div className="space-y-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-200/70">
+                    {t('studio.market.officialTemplateGroup', { defaultValue: 'Official Templates' })}
+                  </p>
+                  {filteredOfficialTemplates.map((source, index) => (
+                    <CreativeSourceCard
+                      key={creativeSourceKey(source.source_type, source.source_id)}
+                      source={source}
+                      selected={selectedSourceKey === creativeSourceKey(source.source_type, source.source_id)}
+                      index={index}
+                      onSelect={() => {
+                        selectOfficialTemplate(source.template_id || source.source_id);
+                        onClose();
+                      }}
+                    />
+                  ))}
                 </div>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-black text-white">{preset.name}</p>
-                      <p className="mt-1 text-sm text-gray-400 line-clamp-2">{preset.description || t('studio.market.cardFallback', { defaultValue: 'Designed for restaurant-friendly commercial outputs.' })}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {preset.tags?.slice(0, 3).map((tag) => (
-                      <span key={tag} className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/70">{tag}</span>
-                    ))}
-                  </div>
+              )}
+
+              {filteredStylePresets.length > 0 && (
+                <div className="space-y-4">
+                  <p className="pt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-purple-200/70">
+                    {t('studio.market.myStyleGroup', { defaultValue: 'My Styles' })}
+                  </p>
+                  {filteredStylePresets.map((source, index) => (
+                    <CreativeSourceCard
+                      key={creativeSourceKey(source.source_type, source.source_id)}
+                      source={source}
+                      selected={selectedSourceKey === creativeSourceKey(source.source_type, source.source_id)}
+                      index={filteredOfficialTemplates.length + index}
+                      onSelect={() => {
+                        selectPreset(source.style_preset_id || source.source_id);
+                        onClose();
+                      }}
+                    />
+                  ))}
                 </div>
-              </button>
-            ))
+              )}
+            </>
+          )}
+          {officialSourceCount > 0 && (
+            <div className="pt-1 text-center text-[11px] uppercase tracking-[0.18em] text-white/28">
+              {officialSourceCount} {t('studio.market.officialTemplateCount', { defaultValue: 'official templates ready in studio' })}
+            </div>
           )}
         </div>
       </aside>
     </>
+  );
+}
+
+function CreativeSourceCard({
+  source,
+  selected,
+  index,
+  onSelect,
+}: {
+  source: ReturnType<typeof listStudioCreativeSources>[number];
+  selected: boolean;
+  index: number;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <button
+      onClick={onSelect}
+      className="interactive-panel interactive-panel-purple group relative w-full overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03] text-left hover:bg-white/[0.05] animate-slide-up"
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      <div className="relative h-40 overflow-hidden">
+        <img
+          src={source.preview_url || `https://picsum.photos/seed/${source.source_id}/400/300`}
+          alt={source.title}
+          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+        {selected && (
+          <div className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-white shadow-[0_0_16px_rgba(249,115,22,0.45)]">
+            <Check className="h-4 w-4" />
+          </div>
+        )}
+        <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+          {source.source_type === 'template' && (
+            <div className="rounded-full border border-orange-400/20 bg-orange-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-orange-100">
+              {t('studio.market.officialTemplate', { defaultValue: 'Official Template' })}
+            </div>
+          )}
+          {source.locked && (
+            <div className="rounded-full border border-amber-400/25 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-100">
+              <Lock className="mr-1 inline h-3 w-3" />
+              {source.plan_required || 'Locked'}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-base font-black text-white">{source.title}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-gray-400">{source.description || t('studio.market.cardFallback', { defaultValue: 'Designed for restaurant-friendly commercial outputs.' })}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {source.tags?.slice(0, 3).map((tag) => (
+            <span key={tag} className="rounded-full border border-white/8 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/70">{tag}</span>
+          ))}
+        </div>
+      </div>
+    </button>
   );
 }

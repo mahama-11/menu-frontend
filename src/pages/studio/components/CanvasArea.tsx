@@ -1,12 +1,12 @@
 import { useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAssetStore, useGenerationJobStore, useVariantSelectionStore } from '@/store/studioStore';
-import { generationJobService } from '@/services/studio';
+import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
 import WorkspaceShowcase from './WorkspaceShowcase';
 
 export default function CanvasArea() {
   const { assets, selectedAssetId } = useAssetStore();
-  const { activeJobId, jobs, upsertJob, stopPolling } = useGenerationJobStore();
+  const { activeJobId, jobs } = useGenerationJobStore();
   const { selectedVariantId, selectVariant } = useVariantSelectionStore();
 
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
@@ -31,31 +31,6 @@ export default function CanvasArea() {
       activeJob.variants[0]
     );
   }, [activeJob, selectedVariantId]);
-
-  // Polling logic from WorkspaceCanvas
-  useEffect(() => {
-    if (!activeJobId) return;
-
-    const currentJob = jobs.find((job) => job.job_id === activeJobId);
-    if (!currentJob || ['completed', 'failed', 'canceled'].includes(currentJob.status)) {
-      stopPolling(activeJobId);
-      return;
-    }
-
-    const interval = window.setInterval(async () => {
-      try {
-        const updatedJob = await generationJobService.getJob(activeJobId);
-        upsertJob(updatedJob);
-        if (['completed', 'failed', 'canceled'].includes(updatedJob.status)) {
-          stopPolling(activeJobId);
-        }
-      } catch (error) {
-        console.error('Polling failed:', error);
-      }
-    }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, [activeJobId, jobs, stopPolling, upsertJob]);
 
   // Auto-select variant
   useEffect(() => {
@@ -99,7 +74,7 @@ export default function CanvasArea() {
           >
             <div className="absolute inset-0 z-0">
               <img 
-                src={selectedAsset.url || selectedAsset.preview_url} 
+                src={getStudioAssetDisplayUrl(selectedAsset)} 
                 className="w-full h-full object-cover opacity-30 blur-[60px] scale-110"
                 alt="Background Blur"
               />
@@ -112,7 +87,7 @@ export default function CanvasArea() {
             >
               <div className="relative w-full h-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl group">
                 <img 
-                  src={selectedAsset.url || selectedAsset.preview_url} 
+                  src={getStudioAssetDisplayUrl(selectedAsset)} 
                   className="w-full h-full object-contain bg-black/20"
                   alt="Base Asset"
                 />
@@ -135,7 +110,7 @@ export default function CanvasArea() {
           >
             <div className="absolute inset-0 z-0">
               <img 
-                src={selectedAsset.url || selectedAsset.preview_url} 
+                src={getStudioAssetDisplayUrl(selectedAsset)} 
                 className="w-full h-full object-cover opacity-20 blur-[60px] scale-110 grayscale"
                 alt="Background Blur"
               />
@@ -145,7 +120,7 @@ export default function CanvasArea() {
             <div className="relative z-10 w-full max-w-4xl h-full max-h-[70vh] p-4 flex items-center justify-center">
               <div className="relative w-full h-full rounded-3xl overflow-hidden border border-purple-500/30 shadow-[0_0_50px_rgba(139,92,246,0.15)]">
                 <img 
-                  src={selectedAsset.url || selectedAsset.preview_url} 
+                  src={getStudioAssetDisplayUrl(selectedAsset)} 
                   className="w-full h-full object-contain bg-black/40 grayscale opacity-40"
                   alt="Processing"
                 />
@@ -175,7 +150,7 @@ export default function CanvasArea() {
           >
             <div className="absolute inset-0 z-0">
               <img 
-                src={currentVariant.asset.url || currentVariant.asset.preview_url || currentVariant.asset.source_url} 
+                src={getStudioAssetDisplayUrl(currentVariant.asset)} 
                 className="w-full h-full object-cover opacity-40 blur-[40px] scale-110"
                 alt="Background Blur"
               />
@@ -191,7 +166,7 @@ export default function CanvasArea() {
             >
               <div className="relative w-full h-full rounded-[2rem] overflow-hidden border border-white/10 shadow-[0_20px_80px_rgba(0,0,0,0.5)]">
                 <img 
-                  src={currentVariant.asset.url || currentVariant.asset.preview_url || currentVariant.asset.source_url} 
+                  src={getStudioAssetDisplayUrl(currentVariant.asset)} 
                   className="w-full h-full object-contain bg-black/20"
                   alt="Result"
                 />

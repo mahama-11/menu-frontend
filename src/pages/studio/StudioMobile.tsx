@@ -7,14 +7,17 @@ import { useWalletBalances, useAuthStore } from '@/store/authStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { StudioBillingErrorCode } from '@/types/studio';
 import { readFileAsDataURL } from '@/utils/file';
+import { buildCreateJobRequestFromCreativeSource, findCreativeSourceByKey, listStudioCreativeSources } from '@/utils/studioCreativeSource';
+import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
+import { useStudioSessionActions } from './hooks/useStudioSessionActions';
 import WorkspaceCanvas from './components/WorkspaceCanvas';
 import StyleMarketDrawer from './components/StyleMarketDrawer';
 
 export default function StudioMobile() {
   const { t } = useTranslation();
   const { assets, addAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
-  const { presets, selectedPresetId, selectPreset } = useStylePresetStore();
-  const { upsertJob, setActiveJob } = useGenerationJobStore();
+  const { presets, officialTemplates, selectedSourceKey, selectPreset, selectOfficialTemplate } = useStylePresetStore();
+  const { upsertJob, setActiveJob, startPolling } = useGenerationJobStore();
   const { usableBalance } = useWalletBalances();
 
   const [step, setStep] = useState(1);
@@ -24,18 +27,21 @@ export default function StudioMobile() {
   const [isMarketOpen, setIsMarketOpen] = useState(false);
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const { removeCurrentBaseAsset } = useStudioSessionActions();
 
   React.useEffect(() => {
     void useAuthStore.getState().fetchWalletSummaries();
   }, []);
 
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
-  const selectedPreset = presets.find((preset) => preset.style_preset_id === selectedPresetId);
-  const filteredPresets = useMemo(() => {
+  const selectedSource = findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey);
+  const canUseSelectedSource = Boolean(selectedSource && !selectedSource.locked && (selectedSource.source_type !== 'template' || selectedSource.is_hydrated));
+  const filteredSources = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return presets.slice(0, 6);
-    return presets.filter((preset) => [preset.name, preset.description || '', ...(preset.tags || [])].join(' ').toLowerCase().includes(normalized)).slice(0, 6);
-  }, [presets, query]);
+    const sources = listStudioCreativeSources(presets, officialTemplates);
+    if (!normalized) return sources.slice(0, 6);
+    return sources.filter((source) => [source.title, source.description || '', ...(source.tags || [])].join(' ').toLowerCase().includes(normalized)).slice(0, 6);
+  }, [officialTemplates, presets, query]);
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -75,23 +81,21 @@ export default function StudioMobile() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !promptDraft.trim()) return;
+    if (!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource) return;
     setGenerating(true);
     setBillingError(null);
     try {
       const job = await generationJobService.createJob({
-        mode: 'single',
-        input_mode: 'image_to_image',
-        style_preset_id: selectedPresetId || undefined,
-        source_asset_ids: [selectedAssetId],
-        prompt: promptDraft.trim(),
-        requested_variants: 4,
-        params: {
-          prompt: promptDraft.trim(),
-        },
+        ...buildCreateJobRequestFromCreativeSource({
+          source: selectedSource,
+          sourceAssetIds: [selectedAssetId],
+          inputMode: 'image_to_image',
+          promptOverride: promptDraft.trim(),
+        }),
       });
       upsertJob(job);
       setActiveJob(job.job_id);
+      startPolling(job.job_id);
       setStep(3);
     } catch (err: any) {
       console.error(err);
@@ -118,6 +122,11 @@ export default function StudioMobile() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleResetBaseAsset = () => {
+    removeCurrentBaseAsset();
+    setStep(1);
   };
 
   return (
@@ -147,7 +156,17 @@ export default function StudioMobile() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">{t('studio.panel.mobileSummary', { defaultValue: 'Session Summary' })}</p>
-                <p className="mt-2 text-sm font-black text-white">{selectedPreset ? selectedPreset.name : t('studio.panel.notSelected', { defaultValue: 'Not selected' })}</p>
+                <p className="mt-2 text-sm font-black text-white">{selectedSource ? selectedSource.title : t('studio.panel.notSelected', { defaultValue: 'Not selected' })}</p>
+                {selectedSource?.locked && (
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-amber-200/70">
+                    {selectedSource.plan_required || t('studio.market.locked', { defaultValue: 'Locked' })}
+                  </p>
+                )}
+                {selectedSource?.source_type === 'template' && !selectedSource.is_hydrated && !selectedSource.locked && (
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-purple-200/70">
+                    {t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' })}
+                  </p>
+                )}
               </div>
               <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs text-white/70 inline-flex items-center gap-2">
                 <Wallet className="h-3.5 w-3.5 text-primary-300" />
@@ -156,7 +175,7 @@ export default function StudioMobile() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <MobileStat label={t('studio.panel.baseImage', { defaultValue: 'Base image' })} value={selectedAsset ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.missing', { defaultValue: 'Required' })} />
-              <MobileStat label={t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })} value={selectedPreset ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.optional', { defaultValue: 'Optional' })} />
+              <MobileStat label={t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })} value={selectedSource ? t('studio.panel.ready', { defaultValue: 'Ready' }) : t('studio.panel.optional', { defaultValue: 'Optional' })} />
             </div>
           </div>
 
@@ -175,13 +194,13 @@ export default function StudioMobile() {
             <div className="space-y-4">
               {selectedAsset && (
                 <div className="rounded-2xl overflow-hidden border border-white/8 bg-white/[0.03] p-3">
-                  <img src={selectedAsset.url} alt={t('studio.step1.title')} className="w-full h-44 object-cover rounded-xl" />
+                  <img src={getStudioAssetDisplayUrl(selectedAsset)} alt={t('studio.step1.title')} className="w-full h-44 object-cover rounded-xl" />
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold text-white">{selectedAsset.file_name || t('studio.step1.title')}</p>
                       <p className="text-xs text-gray-500">{t('studio.panel.baseImageReady', { defaultValue: 'Ready for generation and future refinement.' })}</p>
                     </div>
-                    <button onClick={() => setStep(1)} className="text-xs font-semibold text-white/60">{t('studio.panel.change', { defaultValue: 'Change' })}</button>
+                    <button onClick={handleResetBaseAsset} className="text-xs font-semibold text-white/60">{t('studio.panel.change', { defaultValue: 'Change' })}</button>
                   </div>
                 </div>
               )}
@@ -219,16 +238,27 @@ export default function StudioMobile() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {filteredPresets.map((preset) => (
+                  {filteredSources.map((source) => (
                     <button
-                      key={preset.style_preset_id}
-                      onClick={() => selectPreset(preset.style_preset_id)}
-                      className={`interactive-panel interactive-panel-purple overflow-hidden rounded-2xl border ${selectedPresetId === preset.style_preset_id ? 'border-orange-500/30 shadow-[0_0_24px_rgba(249,115,22,0.16)]' : 'border-white/8'}`}
+                      key={`${source.source_type}:${source.source_id}`}
+                      onClick={() => {
+                        if (source.source_type === 'template') {
+                          selectOfficialTemplate(source.template_id || source.source_id);
+                        } else {
+                          selectPreset(source.style_preset_id || source.source_id);
+                        }
+                      }}
+                      className={`interactive-panel interactive-panel-purple overflow-hidden rounded-2xl border ${selectedSourceKey === `${source.source_type}:${source.source_id}` ? 'border-orange-500/30 shadow-[0_0_24px_rgba(249,115,22,0.16)]' : 'border-white/8'}`}
                     >
-                      <img src={preset.preview_url || `https://picsum.photos/seed/${preset.style_preset_id}/320/240`} alt={preset.name} className="h-28 w-full object-cover" />
+                      <img src={source.preview_url || `https://picsum.photos/seed/${source.source_id}/320/240`} alt={source.title} className="h-28 w-full object-cover" />
                       <div className="p-3 text-left">
-                        <p className="truncate text-sm font-black text-white">{preset.name}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-gray-400">{preset.description || t('studio.market.cardFallback', { defaultValue: 'Designed for restaurant-friendly commercial outputs.' })}</p>
+                        <p className="truncate text-sm font-black text-white">{source.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-gray-400">{source.description || t('studio.market.cardFallback', { defaultValue: 'Designed for restaurant-friendly commercial outputs.' })}</p>
+                        {source.locked && (
+                          <p className="mt-2 text-[10px] uppercase tracking-[0.14em] text-amber-200/70">
+                            {source.plan_required || t('studio.market.locked', { defaultValue: 'Locked' })}
+                          </p>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -243,11 +273,19 @@ export default function StudioMobile() {
                 {billingError && <p className="mt-3 text-sm text-red-400">{billingError}</p>}
                 <button
                   onClick={handleGenerate}
-                  disabled={!selectedAssetId || !promptDraft.trim() || generating}
+                  disabled={!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource || generating}
                   className="mt-4 btn-primary inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-4 text-sm font-bold disabled:opacity-60"
                 >
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {generating ? t('studio.step3.creating') : t('studio.step3.btn')}
+                  {generating
+                    ? t('studio.step3.creating')
+                    : !selectedSource
+                      ? t('studio.step3.selectStyleFirst', { defaultValue: 'Select Style' })
+                      : !canUseSelectedSource
+                        ? selectedSource.locked
+                          ? t('studio.market.locked', { defaultValue: 'Locked' })
+                          : t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' })
+                        : t('studio.step3.btn')}
                 </button>
               </div>
             </div>

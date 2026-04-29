@@ -15,8 +15,10 @@ const PrivacyPage = lazy(() => import('@/pages/Privacy'));
 const TermsPage = lazy(() => import('@/pages/Terms'));
 const DashboardHomePage = lazy(() => import('@/pages/dashboard/DashboardHomePage'));
 const DashboardCreatePage = lazy(() => import('@/pages/dashboard/DashboardCreatePage'));
+const DashboardTemplateCenterPage = lazy(() => import('@/pages/dashboard/DashboardTemplateCenterPage'));
 const AssetLibrarySection = lazy(() => import('@/pages/dashboard/AssetLibrarySection'));
 const HistoryCenter = lazy(() => import('@/pages/dashboard/HistoryCenter'));
+const DashboardWalletPage = lazy(() => import('@/pages/dashboard/DashboardWalletPage'));
 const DashboardReferralPage = lazy(() => import('@/pages/dashboard/DashboardReferralPage'));
 const DashboardSettingsPage = lazy(() => import('@/pages/dashboard/DashboardSettingsPage'));
 const ChannelLayout = lazy(() => import('@/pages/dashboard/channel/ChannelLayout'));
@@ -71,6 +73,14 @@ export const router = createBrowserRouter([
             path: 'terms',
             element: withSuspense(<TermsPage />),
           },
+          {
+            path: 'templates',
+            element: withSuspense(<DashboardTemplateCenterPage />),
+          },
+          {
+            path: 'templates/:templateId',
+            element: withSuspense(<DashboardTemplateCenterPage />),
+          },
         ],
       },
       {
@@ -106,12 +116,20 @@ export const router = createBrowserRouter([
             element: withSuspense(<DashboardCreatePage />),
           },
           {
+            path: 'templates',
+            element: withSuspense(<DashboardTemplateCenterPage />),
+          },
+          {
             path: 'library',
             element: withSuspense(<AssetLibrarySection />),
           },
           {
             path: 'history',
             element: withSuspense(<HistoryCenter />),
+          },
+          {
+            path: 'wallet',
+            element: withSuspense(<DashboardWalletPage />),
           },
           {
             path: 'referral',

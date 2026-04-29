@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { BadgePercent, Library, Menu, Settings, Sparkles, User, Users, WalletCards, X } from 'lucide-react';
+import { BadgePercent, BookTemplate, Library, Menu, Settings, Sparkles, User, Users, WalletCards, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from '@/pages/dashboard/copy';
+import { commercialService } from '@/services/commercial';
+import type { CommercialOrderView } from '@/types/commercial';
 
 type NavItem = {
   to: string;
@@ -22,15 +24,33 @@ export default function DashboardLayout() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const walletSummaries = useAuthStore((state) => state.walletSummaries);
-  const credits = useDashboardStore((state) => state.credits);
-  const maxCredits = useDashboardStore((state) => state.maxCredits);
-  const plan = useDashboardStore((state) => state.plan);
-  const resetDate = useDashboardStore((state) => state.resetDate);
+  const quotaSummary = useAuthStore((state) => state.quotaSummary);
+  const legacyPlan = useDashboardStore((state) => state.plan);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [latestSubscription, setLatestSubscription] = useState<CommercialOrderView | null>(null);
 
   useEffect(() => {
     void useDashboardStore.getState().fetchDashboardData();
     void useAuthStore.getState().fetchWalletSummaries();
+    let cancelled = false;
+    commercialService.listOrders()
+      .then((result) => {
+        if (cancelled) return;
+        const active = (result.items || [])
+          .filter((item) => item.order?.status === 'fulfilled' && item.order?.package_type === 'subscription')
+          .sort((a, b) => {
+            const aTime = new Date(a.order?.fulfilled_at || a.order?.updated_at || a.order?.created_at || 0).getTime();
+            const bTime = new Date(b.order?.fulfilled_at || b.order?.updated_at || b.order?.created_at || 0).getTime();
+            return bTime - aTime;
+          })[0] || null;
+        setLatestSubscription(active);
+      })
+      .catch(() => {
+        if (!cancelled) setLatestSubscription(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -49,13 +69,26 @@ export default function DashboardLayout() {
   const canManageReferral = permissions.includes('menu.referral.manage');
   const hasChannelAccess = permissions.includes('menu.channel.read') || permissions.includes('menu.channel.manage');
   const canManageChannel = permissions.includes('menu.channel.manage');
-  const creditPercent = Math.min(100, Math.max(0, (credits / Math.max(maxCredits, 1)) * 100));
   const tDash = (key: string) => getDashboardText(lang, key);
+  const allowanceSummary = quotaSummary?.remaining || 0;
+  const creditSummary = walletSummaries?.find((item) => item.asset_code === 'MENU_CREDIT')?.total_balance || 0;
+  const promoSummary = walletSummaries?.find((item) => item.asset_code === 'MENU_PROMO_CREDIT')?.total_balance || 0;
+  const spendableCredits = allowanceSummary + creditSummary + promoSummary;
+  const sidebarCredits = spendableCredits;
+  const sidebarPlan = latestSubscription?.order?.package_code?.includes('.basic.')
+    ? 'Basic'
+    : latestSubscription?.order?.package_code?.includes('.pro.')
+      ? 'Pro'
+      : latestSubscription?.order?.package_code?.includes('.growth.')
+        ? 'Growth'
+        : legacyPlan;
 
   const navItems = useMemo<NavItem[]>(() => ([
     { to: '/dashboard', key: 'dash.nav.home', icon: <Sparkles className="h-4 w-4" /> },
     { to: '/dashboard/create', key: 'dash.nav.create', icon: <Sparkles className="h-4 w-4" /> },
+    { to: '/dashboard/templates', key: 'dash.nav.templates', icon: <BookTemplate className="h-4 w-4" /> },
     { to: '/dashboard/library', key: 'dash.nav.library', icon: <Library className="h-4 w-4" /> },
+    { to: '/dashboard/wallet', key: 'dash.nav.wallet', icon: <WalletCards className="h-4 w-4" /> },
     { to: '/dashboard/history', key: 'dash.nav.history', icon: <WalletCards className="h-4 w-4" /> },
     { to: '/dashboard/referral', key: 'dash.route.referral', icon: <Users className="h-4 w-4" />, hidden: !hasReferralAccess },
     { to: '/dashboard/channel', key: 'dash.route.channel', icon: <BadgePercent className="h-4 w-4" />, hidden: !hasChannelAccess },
@@ -82,21 +115,25 @@ export default function DashboardLayout() {
         <div
           className="glass mt-8 cursor-pointer rounded-xl border border-white/5 p-4 transition-all hover:border-primary-500/30"
           title={walletSummaries ? walletSummaries.map((item) => `${item.asset_code}: ${item.total_balance}`).join('\n') : 'Total usable balance'}
+          onClick={() => navigate('/dashboard/wallet')}
         >
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs text-gray-400">{tDash('dash.credits')}</span>
-            <span className="inline-flex items-center rounded-full bg-green-400/10 px-2 py-0.5 text-xs font-bold text-green-400">{plan}</span>
+            <span className="text-xs text-gray-400">{tDash('dash.nav.wallet')}</span>
+            <span className="inline-flex items-center rounded-full bg-green-400/10 px-2 py-0.5 text-xs font-bold text-green-400">{sidebarPlan}</span>
           </div>
-          <div className="mb-2 flex items-end gap-1">
-            <span className="gradient-text text-3xl font-black">{credits}</span>
-            <span className="mb-1 text-sm text-gray-500">/ {maxCredits}</span>
+          <div className="space-y-1">
+            <p className="text-2xl font-black text-white">{sidebarCredits}</p>
+            <p className="text-xs text-gray-500">
+              {lang === 'zh' ? '当前可用积分/额度' : lang === 'th' ? 'เครดิต/โควตาที่ใช้ได้' : 'Current available credits / quota'}
+            </p>
+            <p className="text-xs text-gray-600">
+              {lang === 'zh'
+                ? `已消费 ${quotaSummary?.consumed || 0}`
+                : lang === 'th'
+                  ? `ใช้ไป ${quotaSummary?.consumed || 0}`
+                  : `Consumed ${quotaSummary?.consumed || 0}`}
+            </p>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/5">
-            <div className="h-full bg-gradient-to-r from-primary-500 to-yellow-400 transition-all duration-700" style={{ width: `${creditPercent}%` }} />
-          </div>
-          <p className="mt-2 text-xs text-gray-600">
-            {resetDate ? `Resets ${new Date(resetDate).toLocaleDateString()}` : tDash('dash.creditReset')}
-          </p>
         </div>
 
         <nav className="mt-6 flex-1 space-y-1">
@@ -154,7 +191,7 @@ export default function DashboardLayout() {
               className="glass cursor-pointer rounded-lg px-3 py-1.5"
               title={walletSummaries ? walletSummaries.map((item) => `${item.asset_code}: ${item.total_balance}`).join('\n') : 'Total usable balance'}
             >
-              <span className="gradient-text text-sm font-bold">{credits}</span>
+              <span className="gradient-text text-sm font-bold">{sidebarCredits}</span>
               <span className="ml-1 text-xs text-gray-500">cr</span>
             </div>
           </div>
@@ -173,16 +210,14 @@ export default function DashboardLayout() {
 
               <div className="glass mb-6 rounded-xl border border-white/5 p-4">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-bold text-gray-400">{tDash('dash.credits')}</span>
-                  <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-400">{plan}</span>
+                  <span className="text-sm font-bold text-gray-400">{tDash('dash.nav.wallet')}</span>
+                  <span className="rounded-full bg-primary-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-400">{sidebarPlan}</span>
                 </div>
-                <h3 className="mb-2 text-xl font-bold">
-                  <span className="text-primary-400">{credits}</span>
-                  <span className="ml-1 text-sm font-normal text-gray-500">/{maxCredits} cr</span>
+                <h3 className="text-xl font-bold">
+                  <span className="text-primary-400">{sidebarCredits}</span>
+                  <span className="ml-1 text-sm font-normal text-gray-500">cr</span>
                 </h3>
-                <div className="h-1.5 overflow-hidden rounded-full bg-black/40">
-                  <div className="h-full bg-gradient-to-r from-primary-500 to-yellow-400" style={{ width: `${creditPercent}%` }} />
-                </div>
+                <p className="mt-2 text-xs text-gray-500">{lang === 'zh' ? '打开钱包查看现金、套餐额度与积分详情' : lang === 'th' ? 'เปิดกระเป๋าเพื่อดูยอดเงิน โควตา และเครดิต' : 'Open wallet to review cash, allowance, and credits'}</p>
               </div>
 
               <nav className="space-y-1">

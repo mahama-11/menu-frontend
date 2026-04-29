@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { useGenerationJobStore, useVariantSelectionStore, useAssetStore } from '@/store/studioStore';
+import { useGenerationJobStore, useVariantSelectionStore } from '@/store/studioStore';
 import { useToastStore } from '@/store/toastStore';
 import type { GenerationJob } from '@/types/studio';
 import { generationJobService } from '@/services/studio';
 import { CheckCircle2, Clock3, Download, Loader2, RefreshCw, XCircle } from 'lucide-react';
+import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
+import { useStudioSessionActions } from '../hooks/useStudioSessionActions';
 import WorkspaceShowcase from './WorkspaceShowcase';
 
 export default function WorkspaceCanvas({ compactHeader = false }: { compactHeader?: boolean }) {
   const { t } = useTranslation();
   const { activeJobId, jobs, upsertJob, stopPolling, setActiveJob } = useGenerationJobStore();
   const { selectVariant, selectedVariantId } = useVariantSelectionStore();
-  const { addAsset, selectAsset, setInputMode } = useAssetStore();
   const { showToast } = useToastStore();
+  const { reuseResultAsBase, clearJobContext } = useStudioSessionActions();
   const [isConfirming, setIsConfirming] = useState(false);
   const handledTerminalJobRef = useRef<string | null>(null);
 
@@ -49,15 +51,13 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
     const handledKey = `${activeJob.job_id}:${activeJob.status}:${activeJob.updated_at}`;
     if (handledTerminalJobRef.current === handledKey) return;
     handledTerminalJobRef.current = handledKey;
-    stopPolling(activeJob.job_id);
-    selectVariant(null);
-    setActiveJob(null);
+    clearJobContext();
     if (activeJob.status === 'canceled') {
       showToast('已取消当前任务', 'success');
       return;
     }
     showToast(activeJob.error_message || activeJob.stage_message || '服务异常，请重试', 'error');
-  }, [activeJob, selectVariant, setActiveJob, showToast, stopPolling]);
+  }, [activeJob, clearJobContext, showToast]);
 
   const handleSelectFinal = async () => {
     if (!activeJob || !currentVariant) return;
@@ -80,9 +80,7 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
       showToast(t('studio.canvas.noPreview', { defaultValue: 'Preview is not ready yet' }), 'error');
       return;
     }
-    addAsset(currentVariant.asset);
-    selectAsset(currentVariant.asset.asset_id);
-    setInputMode('image_to_image');
+    reuseResultAsBase(currentVariant.asset);
     showToast(t('studio.canvas.reuseReady', { defaultValue: 'Result moved back as a new base image' }), 'success');
   };
 
@@ -91,9 +89,7 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
     try {
       const updatedJob = await generationJobService.cancelJob(activeJob.job_id);
       upsertJob(updatedJob);
-      stopPolling(activeJob.job_id);
-      selectVariant(null);
-      setActiveJob(null);
+      clearJobContext();
       showToast(t('studio.canvas.cancelSuccess', { defaultValue: 'Generation job canceled' }), 'success');
     } catch (error) {
       console.error(error);
@@ -144,7 +140,7 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
                 <>
                   <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/8 bg-black/30 relative">
                     <img
-                      src={currentVariant.asset.url || currentVariant.asset.preview_url || currentVariant.asset.source_url}
+                      src={getStudioAssetDisplayUrl(currentVariant.asset)}
                       alt="Selected variant"
                       className="h-full w-full object-contain"
                     />
@@ -190,7 +186,7 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
                       </button>
                     )}
                     <a
-                      href={currentVariant.asset.url || currentVariant.asset.source_url}
+                      href={getStudioAssetDisplayUrl(currentVariant.asset)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.07]"
@@ -233,7 +229,7 @@ export default function WorkspaceCanvas({ compactHeader = false }: { compactHead
                     >
                       <div className="relative aspect-[4/3] bg-white/5">
                         {variant.asset ? (
-                          <img src={variant.asset.url || variant.asset.preview_url || variant.asset.source_url} alt={`Variant ${index + 1}`} className="h-full w-full object-cover" />
+                          <img src={getStudioAssetDisplayUrl(variant.asset)} alt={`Variant ${index + 1}`} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-white/30">{t('studio.canvas.noPreviewAvailable', { defaultValue: 'No Preview' })}</div>
                         )}

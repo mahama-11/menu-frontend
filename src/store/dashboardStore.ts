@@ -8,10 +8,7 @@ import { useAuthStore } from './authStore';
 const DASHBOARD_TTL_MS = 60_000;
 
 interface DashboardState {
-  credits: number;
-  maxCredits: number;
   plan: string;
-  resetDate: string;
   profileName: string;
   profileRestaurantName: string;
   activityLog: Activity[];
@@ -31,10 +28,7 @@ function shouldApplyProfileLanguage(profile: ProfileResponse): boolean {
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
-  credits: 20,
-  maxCredits: 20,
   plan: 'Basic',
-  resetDate: '',
   profileName: '',
   profileRestaurantName: '',
   activityLog: [],
@@ -57,8 +51,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
     dashboardRequest = (async () => {
       try {
-        const [creditsRes, profileRes, activitiesRes] = await Promise.all([
-          authService.getCredits(),
+        const [profileRes, activitiesRes] = await Promise.all([
           authService.getProfile(),
           authService.getActivities(20, 0),
         ]);
@@ -69,10 +62,6 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         }
 
         set({
-          credits: typeof creditsRes.balance === 'number' ? creditsRes.balance : get().credits,
-          maxCredits: typeof creditsRes.max_credits === 'number' ? creditsRes.max_credits : get().maxCredits,
-          plan: creditsRes.plan_name || get().plan,
-          resetDate: creditsRes.reset_date || '',
           profileName: profileRes.name || '',
           profileRestaurantName: profileRes.restaurant_name || '',
           activityLog: activitiesRes?.activities || [],

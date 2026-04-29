@@ -21,6 +21,7 @@ export interface StudioAsset {
   file_name: string;
   source_url: string;
   preview_url?: string;
+  display_url?: string;
   metadata?: Record<string, any>;
   created_at: string;
   updated_at?: string;
@@ -58,6 +59,33 @@ export interface StylePreset {
   updated_at: string;
 }
 
+export type StudioCreativeSourceType = 'style_preset' | 'template';
+
+export interface StudioCreativeSource {
+  source_id: string;
+  source_type: StudioCreativeSourceType;
+  title: string;
+  description?: string;
+  preview_url?: string;
+  tags: string[];
+  dimensions: StyleDimension[];
+  available_platforms?: string[];
+  execution_profile?: Record<string, any>;
+  prompt?: string;
+  metadata?: Record<string, any>;
+  plan_required?: string;
+  credits_cost?: number;
+  requested_variants?: number;
+  target_platform?: string;
+  provider?: string;
+  locked?: boolean;
+  is_hydrated?: boolean;
+  style_preset_id?: string;
+  template_id?: string;
+  template_version_id?: string;
+  badge_label?: string;
+}
+
 export type ChargeStatus = 'created' | 'reserved' | 'settled' | 'released' | 'failed_need_reconcile';
 
 export interface JobChargeSummary {
@@ -87,6 +115,7 @@ export interface GenerationVariant {
   variant_id: string;
   job_id: string;
   asset_id: string;
+  preview_url?: string;
   index: number;
   status: 'pending' | 'ready' | 'failed' | 'completed';
   score?: number;

@@ -1,26 +1,32 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, LayoutGrid, Loader2, Upload, CheckCircle2, Download, RefreshCw, XCircle } from 'lucide-react';
+import { Sparkles, LayoutGrid, Loader2, Upload, CheckCircle2, Download, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAssetStore, useStylePresetStore, useGenerationJobStore, useVariantSelectionStore } from '@/store/studioStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { useToastStore } from '@/store/toastStore';
 import { StudioBillingErrorCode } from '@/types/studio';
+import { readFileAsDataURL } from '@/utils/file';
+import { buildCreateJobRequestFromCreativeSource, findCreativeSourceByKey } from '@/utils/studioCreativeSource';
+import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
+import { useStudioSessionActions } from '../hooks/useStudioSessionActions';
 
 export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: () => void }) {
   const { t } = useTranslation();
   const { assets, addAsset, selectAsset, selectedAssetId } = useAssetStore();
-  const { presets, selectedPresetId } = useStylePresetStore();
-  const { activeJobId, jobs, upsertJob, setActiveJob, stopPolling } = useGenerationJobStore();
+  const { presets, officialTemplates, selectedSourceKey } = useStylePresetStore();
+  const { activeJobId, jobs, upsertJob, setActiveJob, startPolling, stopPolling } = useGenerationJobStore();
   const { selectVariant, selectedVariantId } = useVariantSelectionStore();
   const { showToast } = useToastStore();
+  const { reuseResultAsBase, resetToCurrentBase, removeCurrentBaseAsset } = useStudioSessionActions();
   
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [shakeStyleBtn, setShakeStyleBtn] = useState(false);
 
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
-  const selectedPreset = presets.find((preset) => preset.style_preset_id === selectedPresetId);
+  const selectedSource = findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey);
+  const canUseSelectedSource = Boolean(selectedSource && !selectedSource.locked && (selectedSource.source_type !== 'template' || selectedSource.is_hydrated));
   const activeJob = jobs.find((job) => job.job_id === activeJobId);
 
   // Derived View Mode
@@ -62,12 +68,15 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
 
     setUploading(true);
     try {
-      const mockUrl = URL.createObjectURL(file);
+      const dataUrl = await readFileAsDataURL(file);
       const newAsset = await assetService.registerAsset({
-        url: mockUrl,
-        type: 'original',
+        asset_type: 'source',
+        source_type: 'upload',
+        file_name: file.name || `asset-${Date.now()}.png`,
+        source_url: dataUrl,
+        preview_url: dataUrl,
         mime_type: file.type,
-        size_bytes: file.size,
+        file_size: file.size,
         width: 1024,
         height: 1024,
       });
@@ -83,17 +92,20 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !selectedPresetId) return;
+    if (!selectedAssetId || !selectedSource || !canUseSelectedSource) return;
     setGenerating(true);
     try {
       const job = await generationJobService.createJob({
-        mode: 'single',
-        style_preset_id: selectedPresetId,
-        source_asset_ids: [selectedAssetId],
-        requested_variants: 4,
+        ...buildCreateJobRequestFromCreativeSource({
+          source: selectedSource,
+          sourceAssetIds: [selectedAssetId],
+          inputMode: 'image_to_image',
+          promptOverride: selectedSource.prompt,
+        }),
       });
       upsertJob(job);
       setActiveJob(job.job_id);
+      startPolling(job.job_id);
     } catch (err: any) {
       console.error(err);
       const errorCode = err?.response?.data?.error_code || err?.error_code;
@@ -112,10 +124,18 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
   };
 
   const handleGenerateClick = () => {
-    if (!selectedPresetId) {
+    if (!selectedSource) {
       // Guide user to select style by shaking the style button
       setShakeStyleBtn(true);
       setTimeout(() => setShakeStyleBtn(false), 400);
+      return;
+    }
+    if (!canUseSelectedSource) {
+      if (selectedSource.locked) {
+        showToast(t('studio.market.lockedHint', { defaultValue: 'This template is locked for your current plan.' }), 'error');
+      } else {
+        showToast(t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' }), 'success');
+      }
       return;
     }
     handleGenerate();
@@ -132,30 +152,16 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
     }
   };
 
+  const handleRemoveAsset = () => {
+    removeCurrentBaseAsset();
+  };
+
   const handleSetAsBase = () => {
     if (!currentVariant?.asset) return;
-    const url = currentVariant.asset.url || currentVariant.asset.source_url;
+    const url = getStudioAssetDisplayUrl(currentVariant.asset);
     if (!url) return;
-    
-    const newAssetId = `asset-${Date.now()}`;
-    addAsset({
-      asset_id: newAssetId,
-      url,
-      source_url: url,
-      preview_url: url,
-      type: 'generated',
-      asset_type: 'generated',
-      source_type: 'generated',
-      status: 'ready',
-      width: 1024,
-      height: 1024,
-      mime_type: 'image/png',
-      size_bytes: 0,
-      created_at: new Date().toISOString(),
-      file_name: 'refined-result.png',
-    });
-    selectAsset(newAssetId);
-    setActiveJob(null); // Clear active job to return to ready state
+
+    reuseResultAsBase(currentVariant.asset);
     showToast(t('studio.canvas.reuseReady', { defaultValue: 'Moved back as base image' }), 'success');
   };
 
@@ -206,7 +212,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                     <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
                   </div>
                 ) : (
-                  <img src={selectedAsset?.preview_url || selectedAsset?.url} className="h-full w-full object-cover" alt="Base" />
+                  <img src={getStudioAssetDisplayUrl(selectedAsset)} className="h-full w-full object-cover" alt="Base" />
                 )}
               </div>
               <div className="text-left hidden sm:block">
@@ -214,6 +220,16 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                 <p className="text-sm font-bold text-white truncate max-w-[80px]">{t('studio.panel.ready', { defaultValue: 'Ready' })}</p>
               </div>
             </label>
+            {selectedAsset && (
+              <button
+                type="button"
+                onClick={handleRemoveAsset}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+                aria-label={t('studio.panel.remove', { defaultValue: 'Remove' })}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
 
             <div className="h-10 w-px bg-white/10 mx-1 shrink-0" />
 
@@ -221,41 +237,59 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
             <button 
               onClick={onOpenMarket} 
               className={`flex flex-1 items-center gap-3 rounded-2xl p-2 transition min-w-0 ${
-                !selectedPreset 
+                !selectedSource 
                   ? 'bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 animate-pulse-ring' 
                   : 'hover:bg-white/10 border border-transparent'
               } ${shakeStyleBtn ? 'animate-shiver ring-2 ring-red-500/50' : ''}`}
             >
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${selectedPreset ? 'border-white/10' : 'border-purple-400/50 bg-purple-400/20 text-purple-200'} shadow-inner overflow-hidden`}>
-                {selectedPreset ? (
-                  <img src={selectedPreset.preview_url} className="h-full w-full object-cover" alt="Style" />
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border ${selectedSource ? 'border-white/10' : 'border-purple-400/50 bg-purple-400/20 text-purple-200'} shadow-inner overflow-hidden`}>
+                {selectedSource?.preview_url ? (
+                  <img src={selectedSource.preview_url} className="h-full w-full object-cover" alt="Style" />
                 ) : (
                   <LayoutGrid className="w-5 h-5" />
                 )}
               </div>
               <div className="text-left min-w-0">
-                <p className={`text-[10px] uppercase font-bold tracking-wider ${selectedPreset ? 'text-purple-300/70' : 'text-purple-300'}`}>
-                  {t('studio.panel.style', { defaultValue: 'Style Preset' })}
+                <p className={`text-[10px] uppercase font-bold tracking-wider ${selectedSource ? 'text-purple-300/70' : 'text-purple-300'}`}>
+                  {selectedSource?.source_type === 'template'
+                    ? t('studio.market.officialTemplate', { defaultValue: 'Official Template' })
+                    : t('studio.panel.style', { defaultValue: 'Style Preset' })}
                 </p>
-                <p className={`text-sm font-bold truncate ${selectedPreset ? 'text-white' : 'text-purple-100'}`}>
-                  {selectedPreset ? selectedPreset.name : t('studio.market.title', { defaultValue: 'Select Style' })}
+                <p className={`text-sm font-bold truncate ${selectedSource ? 'text-white' : 'text-purple-100'}`}>
+                  {selectedSource ? selectedSource.title : t('studio.market.title', { defaultValue: 'Select Style' })}
                 </p>
+                {selectedSource?.locked && (
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/70">
+                    {selectedSource.plan_required || t('studio.market.locked', { defaultValue: 'Locked' })}
+                  </p>
+                )}
+                {selectedSource?.source_type === 'template' && !selectedSource.is_hydrated && !selectedSource.locked && (
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-purple-200/70">
+                    {t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' })}
+                  </p>
+                )}
               </div>
             </button>
 
             {/* Generate CTA */}
             <button 
               onClick={handleGenerateClick}
-              disabled={generating}
+              disabled={generating || !canUseSelectedSource}
               className={`flex items-center gap-2 rounded-[20px] px-6 py-4 h-full font-bold shrink-0 transition-all ${
-                selectedPreset
+                canUseSelectedSource
                   ? 'btn-primary shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.5)] text-white'
                   : 'bg-white/5 border border-white/10 text-white/30 cursor-not-allowed hover:bg-white/10'
               }`}
             >
               {generating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
               <span className="hidden sm:inline text-base">
-                {selectedPreset ? t('studio.step3.btn', { defaultValue: 'Generate' }) : t('studio.step3.selectStyleFirst', { defaultValue: 'Select Style' })}
+                {!selectedSource
+                  ? t('studio.step3.selectStyleFirst', { defaultValue: 'Select Style' })
+                  : !canUseSelectedSource
+                    ? selectedSource.locked
+                      ? t('studio.market.locked', { defaultValue: 'Locked' })
+                      : t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' })
+                    : t('studio.step3.btn', { defaultValue: 'Generate' })}
               </span>
             </button>
           </motion.div>
@@ -296,7 +330,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                 </span>
               </div>
             </div>
-            <button onClick={() => setActiveJob(null)} className="text-xs text-white bg-white/10 hover:bg-white/20 rounded-full px-4 py-1.5 font-bold transition">
+            <button onClick={resetToCurrentBase} className="text-xs text-white bg-white/10 hover:bg-white/20 rounded-full px-4 py-1.5 font-bold transition">
               {t('studio.canvas.retry', { defaultValue: 'Retry' })}
             </button>
           </motion.div>
@@ -329,7 +363,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                   <span className="hidden sm:inline">{t('studio.canvas.useAsBase', { defaultValue: 'Refine Further' })}</span>
                 </button>
                 <a
-                  href={currentVariant?.asset?.url || currentVariant?.asset?.source_url}
+                  href={getStudioAssetDisplayUrl(currentVariant?.asset)}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 rounded-xl border border-orange-500/20 bg-orange-500/10 hover:bg-orange-500/20 px-4 py-2 text-xs font-bold text-orange-400 transition"
@@ -337,7 +371,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                   <Download className="h-3.5 w-3.5" />
                   {t('studio.canvas.download', { defaultValue: 'Download' })}
                 </a>
-                <button onClick={() => setActiveJob(null)} className="ml-2 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition">
+                <button onClick={resetToCurrentBase} className="ml-2 p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition">
                   <RefreshCw className="w-4 h-4" />
                 </button>
               </div>
@@ -354,7 +388,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
                     className={`relative shrink-0 h-16 w-20 overflow-hidden rounded-xl border-2 transition-all duration-300 ${isActive ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.4)] scale-105' : 'border-transparent opacity-50 hover:opacity-100'}`}
                   >
                     <img 
-                      src={variant.asset?.url || variant.asset?.preview_url || variant.asset?.source_url} 
+                      src={getStudioAssetDisplayUrl(variant.asset)} 
                       className="h-full w-full object-cover" 
                       alt={`Variant ${index + 1}`} 
                     />

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Clock3, CreditCard, LayoutGrid, Loader2, Sparkles, Upload, X } from 'lucide-react';
+import { ArrowRight, Clock3, CreditCard, LayoutGrid, Loader2, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { useAssetStore, useGenerationJobStore, useStylePresetStore } from '@/store/studioStore';
 import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { StudioBillingErrorCode } from '@/types/studio';
 import { readFileAsDataURL } from '@/utils/file';
+import { buildCreateJobRequestFromCreativeSource, findCreativeSourceByKey } from '@/utils/studioCreativeSource';
+import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
 
 export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => void }) {
   const { t } = useTranslation();
-  const { assets, addAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
-  const { presets, selectedPresetId } = useStylePresetStore();
-  const { upsertJob, setActiveJob, activeJobId, jobs } = useGenerationJobStore();
+  const { assets, addAsset, removeAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
+  const { presets, officialTemplates, selectedSourceKey } = useStylePresetStore();
+  const { upsertJob, setActiveJob, startPolling, activeJobId, jobs } = useGenerationJobStore();
   const { usableBalance } = useWalletBalances();
 
   const [uploading, setUploading] = useState(false);
@@ -25,7 +27,8 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
   const activeJob = jobs.find((job) => job.job_id === activeJobId);
   const isJobProcessing = Boolean(activeJob && ['queued', 'processing', 'running', 'dispatching'].includes(activeJob.status));
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
-  const selectedPreset = presets.find((preset) => preset.style_preset_id === selectedPresetId);
+  const selectedSource = findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey);
+  const canUseSelectedSource = Boolean(selectedSource && !selectedSource.locked && (selectedSource.source_type !== 'template' || selectedSource.is_hydrated));
   const hasRequiredSelection = Boolean(selectedAsset && promptDraft.trim());
   const railStatusClass = hasRequiredSelection
     ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
@@ -60,24 +63,22 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !promptDraft.trim()) return;
+    if (!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource) return;
 
     setGenerating(true);
     setBillingError(null);
     try {
       const job = await generationJobService.createJob({
-        mode: 'single',
-        input_mode: 'image_to_image',
-        style_preset_id: selectedPresetId || undefined,
-        source_asset_ids: [selectedAssetId],
-        prompt: promptDraft.trim(),
-        requested_variants: 4,
-        params: {
-          prompt: promptDraft.trim(),
-        },
+        ...buildCreateJobRequestFromCreativeSource({
+          source: selectedSource,
+          sourceAssetIds: [selectedAssetId],
+          inputMode: 'image_to_image',
+          promptOverride: promptDraft.trim(),
+        }),
       });
       upsertJob(job);
       setActiveJob(job.job_id);
+      startPolling(job.job_id);
     } catch (error: any) {
       console.error(error);
       const errorCode = error?.response?.data?.error_code || error?.error_code;
@@ -103,6 +104,12 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleRemoveAsset = () => {
+    if (!selectedAssetId) return;
+    removeAsset(selectedAssetId);
+    setInputMode('image_to_image');
   };
 
   return (
@@ -139,7 +146,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-orange-500/12 text-orange-200">
               {selectedAsset ? (
-                <img src={selectedAsset.preview_url || selectedAsset.source_url || selectedAsset.url} alt={t('studio.panel.selectedAssetAlt', { defaultValue: 'Selected asset' })} className="h-full w-full object-cover" />
+                <img src={getStudioAssetDisplayUrl(selectedAsset)} alt={t('studio.panel.selectedAssetAlt', { defaultValue: 'Selected asset' })} className="h-full w-full object-cover" />
               ) : uploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -151,11 +158,38 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
               <p className="truncate text-sm font-semibold text-white">
                 {selectedAsset ? selectedAsset.file_name || t('studio.panel.baseImage') : t('studio.panel.baseImage', { defaultValue: 'Base image' })}
               </p>
+              {selectedAsset && (
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-[11px] text-white/40">{t('studio.panel.baseReady', { defaultValue: 'Image ready' })}</span>
+                </div>
+              )}
             </div>
             <span className="shrink-0 text-[11px] font-medium text-white/42">
               {selectedAsset ? t('studio.panel.change', { defaultValue: 'Change' }) : t('studio.panel.upload', { defaultValue: 'Upload' })}
             </span>
           </button>
+          {selectedAsset && (
+            <>
+              <button
+                type="button"
+                onClick={() => document.getElementById('studio-rail-upload')?.click()}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-orange-200 transition hover:bg-white/[0.06]"
+                disabled={uploading || isJobProcessing}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {t('studio.panel.change', { defaultValue: 'Change' })}
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveAsset}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-white/70 transition hover:bg-white/[0.06] hover:text-white"
+                disabled={uploading || isJobProcessing}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t('studio.panel.remove', { defaultValue: 'Remove' })}
+              </button>
+            </>
+          )}
 
           <div className="min-w-[260px] flex-[1.2] rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-[0.16em] text-orange-200/70">{t('studio.panel.customPrompt', { defaultValue: 'Custom Prompt' })}</p>
@@ -175,8 +209,8 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
             className="interactive-panel flex min-w-[220px] flex-1 items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2.5 text-left transition hover:bg-white/[0.07] disabled:opacity-60"
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-purple-400/12 text-purple-100">
-              {selectedPreset?.preview_url ? (
-                <img src={selectedPreset.preview_url} alt={selectedPreset.name} className="h-full w-full object-cover" />
+              {selectedSource?.preview_url ? (
+                <img src={selectedSource.preview_url} alt={selectedSource.title} className="h-full w-full object-cover" />
               ) : (
                 <LayoutGrid className="h-4 w-4" />
               )}
@@ -184,11 +218,21 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.16em] text-purple-200/70">{t('studio.panel.styleOptional', { defaultValue: 'Optional Style' })}</p>
               <p className="truncate text-sm font-semibold text-white">
-                {selectedPreset ? selectedPreset.name : t('studio.panel.optional', { defaultValue: 'Optional' })}
+                {selectedSource ? selectedSource.title : t('studio.panel.optional', { defaultValue: 'Optional' })}
               </p>
+              {selectedSource?.locked && (
+                <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-amber-200/70">
+                  {selectedSource.plan_required || t('studio.market.locked', { defaultValue: 'Locked' })}
+                </p>
+              )}
+              {selectedSource?.source_type === 'template' && !selectedSource.is_hydrated && !selectedSource.locked && (
+                <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-purple-200/70">
+                  {t('studio.market.preparingTemplate', { defaultValue: 'Preparing template...' })}
+                </p>
+              )}
             </div>
             <span className="shrink-0 text-[11px] font-medium text-white/42">
-              {selectedPreset ? t('studio.panel.change', { defaultValue: 'Change' }) : t('studio.step2.more')}
+              {selectedSource ? t('studio.panel.change', { defaultValue: 'Change' }) : t('studio.step2.more')}
             </span>
           </button>
         </div>
@@ -202,7 +246,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
           </div>
           <button
             onClick={handleGenerate}
-            disabled={!selectedAssetId || !promptDraft.trim() || isJobProcessing || generating}
+            disabled={!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource || isJobProcessing || generating}
             className="relative min-w-[220px] flex-1 overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all duration-500 hover:from-orange-500 hover:to-orange-400 hover:shadow-[0_0_30px_rgba(249,115,22,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-orange-600 xl:flex-none"
           >
             <span className="relative z-10 flex items-center justify-center gap-2 text-sm">

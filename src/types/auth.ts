@@ -42,6 +42,8 @@ export interface WalletAssetSummary {
   permanent_balance: number;
   reward_balance: number;
   allowance_balance: number;
+  asset_type?: string;
+  lifecycle_type?: string;
   assets: {
     asset_id: string;
     bucket_type: string;
@@ -58,7 +60,24 @@ export interface WalletSummaryResponse {
   permanent_balance: number;
   reward_balance: number;
   allowance_balance: number;
-  assets: WalletAssetSummary[];
+  assets: {
+    asset_code: string;
+    asset_type: string;
+    lifecycle_type: string;
+    account_balance: number;
+    available_balance: number;
+    expiring_balance: number;
+    next_expires_at?: string;
+  }[];
+}
+
+export interface QuotaSummary {
+  product_code: string;
+  billable_item_code: string;
+  granted: number;
+  consumed: number;
+  reserved: number;
+  remaining: number;
 }
 
 export interface CreditsSummary {

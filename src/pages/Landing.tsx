@@ -1,12 +1,214 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '@/hooks/useI18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { useToastStore } from '@/store/toastStore';
+import { commercialService } from '@/services/commercial';
+import type { CommercialAllowancePolicy, CommercialOfferingsResponse, CommercialOrderView, CommercialPackage, CommercialRateCard, CommercialSKU } from '@/types/commercial';
+
+type LandingPlan = {
+  id: string;
+  skuCode: string;
+  packageCode: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  periodLabel: string;
+  features: string[];
+  highlighted: boolean;
+};
+
+type SupportedLanguage = 'zh' | 'th' | 'en';
+
+const safeParseJSON = (raw?: string): Record<string, unknown> => {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+};
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+};
+
+const toSupportedLanguage = (lang: string): SupportedLanguage => {
+  if (lang === 'zh' || lang === 'th') return lang;
+  return 'en';
+};
+
+const localizedText = (value: unknown, lang: SupportedLanguage): string => {
+  if (!value || typeof value !== 'object') return '';
+  const source = value as Record<string, unknown>;
+  const preferred = source[lang];
+  if (typeof preferred === 'string' && preferred.trim()) return preferred;
+  if (typeof source.en === 'string' && source.en.trim()) return source.en;
+  if (typeof source.zh === 'string' && source.zh.trim()) return source.zh;
+  if (typeof source.th === 'string' && source.th.trim()) return source.th;
+  return '';
+};
+
+const localizedList = (value: unknown, lang: SupportedLanguage): string[] => {
+  if (!value || typeof value !== 'object') return [];
+  const source = value as Record<string, unknown>;
+  return toStringArray(source[lang] ?? source.en ?? source.zh ?? source.th);
+};
+
+const displayTierName = (tier: string, pkg: CommercialPackage, sku: CommercialSKU): string => {
+  const normalizedTier = tier.trim().toLowerCase();
+  if (normalizedTier === 'basic') return 'Basic';
+  if (normalizedTier === 'pro') return 'Pro';
+  if (normalizedTier === 'growth') return 'Growth';
+  return pkg.name.replace(/^Menu\s+/i, '').replace(/\s+Package$/i, '') || sku.name.replace(/^Menu\s+/i, '');
+};
+
+const priceSymbol = (currency: string): string => {
+  switch (currency) {
+    case 'THB':
+      return '฿';
+    case 'CNY':
+      return '¥';
+    case 'USD':
+      return '$';
+    default:
+      return currency ? `${currency} ` : '';
+  }
+};
+
+const formatPrice = (amount: number, currency: string): string => {
+  const normalized = Math.round(amount) / 100;
+  const symbol = priceSymbol(currency);
+  if (symbol.endsWith(' ')) return `${symbol}${normalized.toLocaleString()}`;
+  return `${symbol}${normalized.toLocaleString()}`;
+};
+
+const findBestRateCard = (rateCards: CommercialRateCard[], sku: CommercialSKU, packageCode: string): CommercialRateCard | undefined => {
+  return rateCards
+    .filter((item) => item.status === 'active' && (
+      (item.target_type === 'sku' && item.target_id === sku.id) ||
+      safeParseJSON(item.metadata).package_code === packageCode
+    ))
+    .sort((a, b) => b.version - a.version)[0];
+};
+
+const buildDynamicPlans = (offeringsData: CommercialOfferingsResponse | null, lang: SupportedLanguage): LandingPlan[] => {
+  if (!offeringsData?.offerings) return [];
+  const policiesByID = new Map<string, CommercialAllowancePolicy>();
+  offeringsData.offerings.allowance_policies.forEach((item) => {
+    policiesByID.set(item.id, item);
+  });
+
+  return offeringsData.offerings.packages
+    .filter((pkg) => pkg.status === 'active' && pkg.package_type === 'subscription')
+    .map((pkg) => {
+      const packageMetadata = safeParseJSON(pkg.metadata);
+      const linkedSKUCode = typeof packageMetadata.sku_code === 'string' ? packageMetadata.sku_code : '';
+      const sku = offeringsData.offerings.skus.find((item) =>
+        item.status === 'active' &&
+        item.sku_type === 'subscription' &&
+        item.billing_mode === 'recurring' &&
+        (item.code === linkedSKUCode || safeParseJSON(item.metadata).package_code === pkg.code)
+      );
+      if (!sku) return null;
+
+      const skuMetadata = safeParseJSON(sku.metadata);
+      const rateCard = findBestRateCard(offeringsData.offerings.rate_cards, sku, pkg.code);
+      const rateCardMetadata = safeParseJSON(rateCard?.metadata);
+      const priceConfig = safeParseJSON(rateCard?.price_config);
+      const mergedMetadata = { ...rateCardMetadata, ...skuMetadata, ...packageMetadata };
+
+      const monthlyCalls = toNumber(mergedMetadata.monthly_calls) ?? 0;
+      if (monthlyCalls <= 0) return null;
+
+      const explicitDescription = localizedText(mergedMetadata.landing_description_i18n, lang)
+        || (typeof mergedMetadata.landing_description === 'string' ? mergedMetadata.landing_description : '')
+        || (typeof mergedMetadata.description === 'string' ? mergedMetadata.description : '');
+      const explicitFeatures = localizedList(mergedMetadata.landing_features_i18n, lang).concat(toStringArray(mergedMetadata.landing_features));
+      const tier = typeof mergedMetadata.tier === 'string' ? mergedMetadata.tier : '';
+      const price = toNumber(priceConfig.unit_amount) ?? sku.list_price;
+      if (!explicitDescription || explicitFeatures.length === 0) return null;
+
+      return {
+        id: pkg.code,
+        skuCode: sku.code,
+        packageCode: pkg.code,
+        name: displayTierName(tier, pkg, sku),
+        description: explicitDescription,
+        price,
+        currency: sku.currency || rateCard?.currency || 'CNY',
+        periodLabel: lang === 'zh' ? '/月' : lang === 'th' ? '/เดือน' : '/month',
+        features: explicitFeatures,
+        highlighted: tier === 'pro' || sku.code.includes('.pro.'),
+      } satisfies LandingPlan;
+    })
+    .filter((item): item is LandingPlan => Boolean(item))
+    .sort((a, b) => a.price - b.price)
+    .slice(0, 4);
+};
+
+const buildFallbackPlans = (t: (key: string) => string): LandingPlan[] => ([
+  {
+    id: 'fallback-basic',
+    skuCode: '',
+    packageCode: '',
+    name: t('price.free.name'),
+    description: t('price.free.desc'),
+    price: 900,
+    currency: 'CNY',
+    periodLabel: t('price.perMonth'),
+    features: [t('price.free.f1'), t('price.free.f2'), t('price.free.f3'), t('price.free.f4')],
+    highlighted: false,
+  },
+  {
+    id: 'fallback-pro',
+    skuCode: '',
+    packageCode: '',
+    name: t('price.pro.name'),
+    description: t('price.pro.desc'),
+    price: 24900,
+    currency: 'CNY',
+    periodLabel: t('price.perMonth'),
+    features: [t('price.pro.f1'), t('price.pro.f2'), t('price.pro.f3'), t('price.pro.f4')],
+    highlighted: true,
+  },
+  {
+    id: 'fallback-growth',
+    skuCode: '',
+    packageCode: '',
+    name: t('price.growth.name'),
+    description: t('price.growth.desc'),
+    price: 49900,
+    currency: 'CNY',
+    periodLabel: t('price.perMonth'),
+    features: [t('price.growth.f1'), t('price.growth.f2'), t('price.growth.f3'), t('price.growth.f4')],
+    highlighted: false,
+  },
+]);
 
 export default function Landing() {
-  const { t } = useI18n();
+  const navigate = useNavigate();
+  const { t, lang } = useI18n();
+  const showToast = useToastStore((state) => state.showToast);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [offerings, setOfferings] = useState<CommercialOfferingsResponse | null>(null);
+  const [pricingError, setPricingError] = useState(false);
+  const [purchasingPlanID, setPurchasingPlanID] = useState<string | null>(null);
+  const [orders, setOrders] = useState<CommercialOrderView[]>([]);
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
+  const fetchWalletSummaries = useAuthStore((state) => state.fetchWalletSummaries);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -25,7 +227,119 @@ export default function Landing() {
     });
 
     return () => observer.disconnect();
+  }, [offerings, lang]);
+
+  useEffect(() => {
+    let cancelled = false;
+    commercialService.getOfferings()
+      .then((data) => {
+        if (!cancelled) {
+          setOfferings(data);
+          setPricingError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPricingError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setOrders([]);
+      return;
+    }
+    let cancelled = false;
+    commercialService.listOrders()
+      .then((result) => {
+        if (!cancelled) setOrders(result.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setOrders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  const pricingPlans = useMemo(() => {
+    const dynamicPlans = buildDynamicPlans(offerings, toSupportedLanguage(lang));
+    return dynamicPlans.length > 0 ? dynamicPlans : buildFallbackPlans(t);
+  }, [lang, offerings, t]);
+  const pricingGridClassName = useMemo(() => {
+    const count = pricingPlans.length;
+    if (count >= 4) {
+      return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-6xl mx-auto';
+    }
+    if (count === 3) {
+      return 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 max-w-5xl mx-auto';
+    }
+    if (count === 2) {
+      return 'grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto';
+    }
+    return 'grid grid-cols-1 gap-6 max-w-xl mx-auto';
+  }, [pricingPlans.length]);
+  const activeSubscription = useMemo(() => {
+    return [...orders]
+      .filter((item) => item.order?.status === 'fulfilled' && item.order?.package_type === 'subscription')
+      .sort((a, b) => {
+        const aTime = new Date(a.order?.fulfilled_at || a.order?.updated_at || a.order?.created_at || 0).getTime();
+        const bTime = new Date(b.order?.fulfilled_at || b.order?.updated_at || b.order?.created_at || 0).getTime();
+        return bTime - aTime;
+      })[0];
+  }, [orders]);
+
+  const handlePurchase = async (plan: LandingPlan) => {
+    if (!isAuthenticated) {
+      navigate('/register');
+      return;
+    }
+    if (!plan.packageCode && !plan.skuCode) {
+      showToast(lang === 'zh' ? '当前套餐暂不可购买' : lang === 'th' ? 'แพ็กเกจนี้ยังไม่พร้อมซื้อ' : 'This plan is not purchasable yet', 'error');
+      return;
+    }
+    try {
+      setPurchasingPlanID(plan.id);
+      const orderView = await commercialService.createOrder({
+        sku_code: plan.skuCode || undefined,
+        package_code: plan.packageCode || undefined,
+      });
+      const orderID = orderView.order?.id;
+      if (!orderID) {
+        throw new Error(lang === 'zh' ? '创建订单失败' : lang === 'th' ? 'สร้างคำสั่งซื้อไม่สำเร็จ' : 'Failed to create order');
+      }
+      await commercialService.confirmOrderPayment(orderID, {
+        payment_method: 'wallet_balance',
+        provider_code: 'platform_wallet',
+      });
+      await fetchWalletSummaries(true);
+      const latestOrders = await commercialService.listOrders();
+      setOrders(latestOrders.items || []);
+      showToast(
+        lang === 'zh'
+          ? `${plan.name} 购买成功，套餐已生效`
+          : lang === 'th'
+            ? `ซื้อ ${plan.name} สำเร็จและเริ่มใช้งานแล้ว`
+            : `${plan.name} purchased successfully and is now active`,
+        'success',
+      );
+      navigate('/dashboard');
+    } catch (error) {
+      const fallbackMessage = lang === 'zh'
+        ? '购买失败，请检查余额后重试'
+        : lang === 'th'
+          ? 'ซื้อไม่สำเร็จ กรุณาตรวจสอบยอดคงเหลือแล้วลองใหม่'
+          : 'Purchase failed. Please check your balance and try again.';
+      showToast(error instanceof Error ? error.message : fallbackMessage, 'error');
+    } finally {
+      setPurchasingPlanID(null);
+    }
+  };
+  const currentSubscriptionPackageCode = activeSubscription?.order?.package_code || '';
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -375,96 +689,68 @@ export default function Landing() {
             <p className="text-gray-400 max-w-xl mx-auto">{t('pricing.subtitle')}</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {/* Free */}
-            <div className="pricing-card glass rounded-2xl p-6 sm:p-8 reveal">
-              <div className="mb-6">
-                <p className="text-gray-400 font-medium text-sm mb-1">{t('price.free.name')}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black">฿0</span>
-                  <span className="text-gray-500 text-sm">{t('price.forever')}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">{t('price.free.desc')}</p>
-              </div>
-              <div className="space-y-3 mb-8">
-                {[1,2,3,4,5,6].map(i => (
-                  <div key={i} className={`flex items-center justify-between gap-3 ${i > 4 ? 'opacity-40' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <svg className={`w-5 h-5 ${i > 4 ? 'text-gray-600' : 'text-green-400'} flex-shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-                      <span className={`text-sm ${i > 4 ? 'text-gray-600' : 'text-gray-300'}`}>{t(`price.free.f${i}`)}</span>
-                    </div>
-                    {i <= 4 && (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${i === 1 ? 'text-green-400 bg-green-400/10' : 'text-primary-400 bg-primary-400/10'}`}>
-                        {i === 1 ? t('price.credit.free') : `10 ${t('price.creditUnit')}`}
-                      </span>
-                    )}
+          <div className={pricingGridClassName}>
+            {pricingPlans.map((plan, index) => (
+              (() => {
+                const isCurrentSubscription = Boolean(currentSubscriptionPackageCode) && currentSubscriptionPackageCode === plan.packageCode;
+                const isBusy = purchasingPlanID === plan.id;
+                return (
+              <div
+                key={plan.id}
+                className={`pricing-card glass rounded-2xl p-6 sm:p-8 reveal relative ${plan.highlighted ? 'pricing-popular' : ''}`}
+                style={{ transitionDelay: `${index * 0.1}s` }}
+              >
+                {plan.highlighted && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <span className="bg-gradient-to-r from-primary-600 to-primary-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                      {t('price.popular')}
+                    </span>
                   </div>
-                ))}
-              </div>
-              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.free.btn')}</Link>
-            </div>
-
-            {/* Pro */}
-            <div className="pricing-card pricing-popular glass rounded-2xl p-6 sm:p-8 reveal" style={{ transitionDelay: '0.1s' }}>
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="bg-gradient-to-r from-primary-600 to-primary-500 text-white text-xs font-bold px-3 py-1 rounded-full">{t('price.popular')}</span>
-              </div>
-              <div className="mb-6">
-                <p className="text-primary-400 font-medium text-sm mb-1">{t('price.pro.name')}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black gradient-text">฿249</span>
-                  <span className="text-gray-500 text-sm">{t('price.perMonth')}</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">{t('price.pro.desc')}</p>
-              </div>
-              <div className="space-y-3 mb-8">
-                {[1,2,3,4,5].map(i => (
-                  <div key={i} className={`flex items-center justify-between gap-3 ${i > 3 ? 'opacity-40' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <svg className={`w-5 h-5 ${i > 3 ? 'text-gray-600' : 'text-green-400'} flex-shrink-0`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-                      <span className={`text-sm ${i > 3 ? 'text-gray-600' : 'text-gray-300'}`}>{t(`price.pro.f${i}`)}</span>
-                    </div>
-                    {i <= 3 && (
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 text-primary-400 bg-primary-400/10">
-                        {i === 3 ? '15' : '10'} {t('price.creditUnit')}
-                      </span>
-                    )}
+                )}
+                <div className="mb-6">
+                  <p className={`font-medium text-sm mb-1 ${plan.highlighted ? 'text-primary-400' : 'text-gray-400'}`}>{plan.name}</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className={`text-4xl font-black ${plan.highlighted ? 'gradient-text' : ''}`}>{formatPrice(plan.price, plan.currency)}</span>
+                    <span className="text-gray-500 text-sm">{plan.periodLabel}</span>
                   </div>
-                ))}
-              </div>
-              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-primary w-full py-3 rounded-xl font-bold block text-center">{t('price.pro.btn')}</Link>
-            </div>
-
-            {/* Growth */}
-            <div className="pricing-card glass rounded-2xl p-6 sm:p-8 reveal" style={{ transitionDelay: '0.2s' }}>
-              <div className="mb-6">
-                <p className="text-gray-400 font-medium text-sm mb-1">{t('price.growth.name')}</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black">฿499</span>
-                  <span className="text-gray-500 text-sm">{t('price.perMonth')}</span>
+                  <p className="text-xs text-gray-500 mt-2">{plan.description}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">{t('price.growth.desc')}</p>
-              </div>
-              <div className="space-y-3 mb-8">
-                {[1,2,3,4,5].map(i => (
-                  <div key={i} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><polyline points="20,6 9,17 4,12"/></svg>
-                      <span className="text-sm text-gray-300">{t(`price.growth.f${i}`)}</span>
+                <div className="space-y-3 mb-8">
+                  {plan.features.map((feature) => (
+                    <div key={feature} className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20,6 9,17 4,12"/>
+                      </svg>
+                      <span className="text-sm text-gray-300">{feature}</span>
                     </div>
-                    {i <= 2 && (
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 text-primary-400 bg-primary-400/10">
-                        10 {t('price.creditUnit')}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={isBusy || isCurrentSubscription}
+                  onClick={() => void handlePurchase(plan)}
+                  className={`${plan.highlighted ? 'btn-primary font-bold' : 'btn-outline font-semibold'} w-full py-3 rounded-xl block text-center disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  {isCurrentSubscription
+                    ? (lang === 'zh' ? '当前套餐' : lang === 'th' ? 'แพ็กเกจปัจจุบัน' : 'Current plan')
+                    : isBusy
+                    ? (lang === 'zh' ? '购买中...' : lang === 'th' ? 'กำลังซื้อ...' : 'Purchasing...')
+                    : isAuthenticated
+                      ? (lang === 'zh' ? '立即购买' : lang === 'th' ? 'ซื้อเลย' : 'Buy now')
+                      : t('hero.cta1')}
+                </button>
               </div>
-              <Link to={isAuthenticated ? "/dashboard" : "/register"} className="btn-outline w-full py-3 rounded-xl font-semibold block text-center">{t('price.growth.btn')}</Link>
-            </div>
+                );
+              })()
+            ))}
           </div>
           
           <p className="text-center text-xs text-gray-500 mt-8 reveal">{t('pricing.note')}</p>
+          {pricingError && (
+            <p className="text-center text-xs text-amber-400/80 mt-3 reveal">
+              {lang === 'zh' ? '当前未取到最新套餐配置，已回退到默认展示。' : lang === 'th' ? 'ไม่สามารถโหลดแพ็กเกจล่าสุดได้ จึงแสดงข้อมูลสำรองแทน' : 'Latest pricing could not be loaded, so fallback plan copy is shown.'}
+            </p>
+          )}
 
           <div className="mt-8 glass rounded-2xl p-6 sm:p-8 max-w-3xl mx-auto reveal">
             <div className="flex flex-col sm:flex-row items-center gap-6">
