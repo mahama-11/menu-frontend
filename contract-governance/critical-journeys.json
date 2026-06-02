@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "project": "menu",
+  "status_vocabulary": [
+    "PASS",
+    "PASS_WITH_NOTES",
+    "PARTIAL_PASS",
+    "BLOCKED",
+    "FAIL"
+  ],
+  "journeys": [
+    {
+      "id": "P0-1",
+      "name": "Registration login package activation allowance visible",
+      "priority": "P0",
+      "routes": [
+        "/register",
+        "/login",
+        "/dashboard"
+      ],
+      "backend": [
+        "POST /api/v1/menu/auth/register",
+        "POST /api/v1/menu/auth/login",
+        "GET /api/v1/menu/auth/session",
+        "GET /api/v1/menu/user/wallet-summary",
+        "GET /api/v1/menu/user/quota-summary"
+      ],
+      "must_not_show": [
+        "package_activation",
+        "provider",
+        "runtime",
+        "STUDIO_BILLING_ALLOWANCE_INSUFFICIENT"
+      ]
+    },
+    {
+      "id": "P0-2",
+      "name": "Template Center Use Template Studio prefill",
+      "priority": "P0",
+      "routes": [
+        "/dashboard/templates",
+        "/studio"
+      ],
+      "backend": [
+        "GET /api/v1/menu/template-center/catalog",
+        "GET /api/v1/menu/template-center/catalog/:id",
+        "POST /api/v1/menu/template-center/catalog/:id/use"
+      ],
+      "must_preserve": [
+        "template_id",
+        "target_platform",
+        "input_slots",
+        "prefilled_job"
+      ]
+    },
+    {
+      "id": "P0-3",
+      "name": "Single image image_to_image generation",
+      "priority": "P0",
+      "routes": [
+        "/studio",
+        "/dashboard/history"
+      ],
+      "backend": [
+        "POST /api/v1/menu/studio/assets",
+        "POST /api/v1/menu/studio/jobs",
+        "GET /api/v1/menu/studio/jobs/:id"
+      ],
+      "runtime_manifest": {
+        "input_mode": "image_to_image"
+      }
+    },
+    {
+      "id": "P0-4",
+      "name": "Four-slot multi_image generation",
+      "priority": "P0",
+      "routes": [
+        "/dashboard/templates",
+        "/studio"
+      ],
+      "source_asset_roles": [
+        "dish_photo",
+        "brand_logo",
+        "menu_reference",
+        "style_reference"
+      ],
+      "runtime_manifest": {
+        "input_mode": "multi_image",
+        "provider": "comfyui_bridge"
+      },
+      "fail_closed": [
+        "unsupported_provider",
+        "more_than_four_source_assets"
+      ]
+    },
+    {
+      "id": "P0-5",
+      "name": "Insufficient allowance fail closed",
+      "priority": "P0",
+      "backend": [
+        "reserve",
+        "consume",
+        "release"
+      ],
+      "ui": [
+        "disabled_or_locked_action",
+        "friendly_toast"
+      ],
+      "must_not_show": [
+        "STUDIO_BILLING_ALLOWANCE_INSUFFICIENT",
+        "provider",
+        "runtime"
+      ]
+    },
+    {
+      "id": "P1-1",
+      "name": "History Library result review",
+      "priority": "P1",
+      "routes": [
+        "/dashboard/history",
+        "/dashboard/library"
+      ],
+      "must_not_show": [
+        "raw provider",
+        "runtime_job_id",
+        "callback"
+      ]
+    },
+    {
+      "id": "P1-2",
+      "name": "Mobile i18n long copy layout",
+      "priority": "P1",
+      "locales": [
+        "zh",
+        "en",
+        "th"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ]
+    }
+  ]
+}

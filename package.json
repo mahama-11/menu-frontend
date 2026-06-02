@@ -10,11 +10,14 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "check:i18n": "node ./scripts/check-locale-keys.mjs",
-    "ci:quick": "npm run typecheck && npm run check:i18n && npm run build",
-    "ci:all": "npm run ci:quick",
-    "test:e2e": "playwright test",
+    "ci:quick": "npm run typecheck && npm run check:i18n && npm run build && npm run acceptance:governance && npm run frontend:gate && npm run test:e2e",
+    "ci:all": "npm run ci:quick && npm run test:visual",
+    "test:e2e": "playwright test --project=chromium-smoke",
     "preview": "vite preview",
-    "prepare": "cd .. && husky v-menu-frontend/.husky"
+    "prepare": "cd .. && husky v-menu-frontend/.husky",
+    "test:visual": "playwright test --project=chromium-visual-desktop --project=chromium-visual-mobile",
+    "frontend:gate": "node scripts/menu-frontend-automation-gate.mjs",
+    "acceptance:governance": "node scripts/menu-acceptance-governance-gate.mjs"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
