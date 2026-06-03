@@ -5,15 +5,22 @@ import { useTranslation } from 'react-i18next';
 import { useAssetStore, useStylePresetStore, useGenerationJobStore, useVariantSelectionStore } from '@/store/studioStore';
 import { assetService, generationJobService } from '@/services/studio';
 import { useToastStore } from '@/store/toastStore';
-import { StudioBillingErrorCode } from '@/types/studio';
+import { StudioBillingErrorCode, type StudioSourceAssetRole } from '@/types/studio';
 import { readFileAsDataURL } from '@/utils/file';
 import { buildCreateJobRequestFromCreativeSource, findCreativeSourceByKey } from '@/utils/studioCreativeSource';
 import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
 import { useStudioSessionActions } from '../hooks/useStudioSessionActions';
 
+const DEFAULT_MULTI_IMAGE_SLOTS = [
+  { role: 'dish_photo', label: 'Dish photo', required: true },
+  { role: 'brand_logo', label: 'Brand logo', required: true },
+  { role: 'menu_reference', label: 'Menu reference', required: true },
+  { role: 'style_reference', label: 'Style reference', required: true },
+] as const;
+
 export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: () => void }) {
   const { t } = useTranslation();
-  const { assets, addAsset, selectAsset, selectedAssetId } = useAssetStore();
+  const { assets, addAsset, selectAsset, selectedAssetId, slotAssetsByRole, assignAssetToSlot } = useAssetStore();
   const { presets, officialTemplates, selectedSourceKey } = useStylePresetStore();
   const { activeJobId, jobs, upsertJob, setActiveJob, startPolling, stopPolling } = useGenerationJobStore();
   const { selectVariant, selectedVariantId } = useVariantSelectionStore();
@@ -26,6 +33,11 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
 
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
   const selectedSource = findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey);
+  const materialSlots = selectedSource?.input_slots?.length ? selectedSource.input_slots : DEFAULT_MULTI_IMAGE_SLOTS;
+  const selectedSlotAssets = materialSlots
+    .map((slot) => ({ slot, asset: assets.find((asset) => asset.asset_id === slotAssetsByRole[slot.role]) }))
+    .filter((item) => item.asset);
+  const sourceAssetIds = selectedSlotAssets.map((item) => item.asset!.asset_id);
   const canUseSelectedSource = Boolean(selectedSource && !selectedSource.locked && (selectedSource.source_type !== 'template' || selectedSource.is_hydrated));
   const activeJob = jobs.find((job) => job.job_id === activeJobId);
 
@@ -62,7 +74,7 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
     error: { width: 340, borderRadius: 40, height: 64 }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, role: StudioSourceAssetRole = 'dish_photo') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -79,27 +91,31 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
         file_size: file.size,
         width: 1024,
         height: 1024,
+        metadata: { material_role: role },
       });
       addAsset(newAsset);
+      assignAssetToSlot(role, newAsset.asset_id);
       selectAsset(newAsset.asset_id);
       showToast(t('studio.panel.uploadSuccess', { defaultValue: 'Base image ready' }), 'success');
     } catch (err) {
       console.error(err);
       showToast(t('studio.panel.uploadFailed', { defaultValue: 'Upload failed' }), 'error');
     } finally {
+      e.target.value = '';
       setUploading(false);
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !selectedSource || !canUseSelectedSource) return;
+    if ((!selectedAssetId && sourceAssetIds.length === 0) || !selectedSource || !canUseSelectedSource) return;
     setGenerating(true);
     try {
       const job = await generationJobService.createJob({
         ...buildCreateJobRequestFromCreativeSource({
           source: selectedSource,
-          sourceAssetIds: [selectedAssetId],
-          inputMode: 'image_to_image',
+          sourceAssetIds: sourceAssetIds.length > 0 ? sourceAssetIds : selectedAssetId ? [selectedAssetId] : [],
+          sourceAssetsByRole: slotAssetsByRole,
+          inputMode: sourceAssetIds.length > 1 ? 'multi_image' : 'image_to_image',
           promptOverride: selectedSource.prompt,
         }),
       });
@@ -183,7 +199,17 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
             className="flex w-full items-center justify-center h-full px-4"
           >
             <label className="flex items-center justify-center gap-3 cursor-pointer hover:bg-white/5 px-6 py-2 rounded-full transition w-full">
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={uploading} />
+              {materialSlots.map((slot, index) => (
+                <input
+                  key={slot.role}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(event) => void handleFileUpload(event, slot.role)}
+                  disabled={uploading}
+                  aria-label={slot.label || `Material ${index + 1}`}
+                />
+              ))}
               {uploading ? (
                 <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
               ) : (
@@ -205,7 +231,17 @@ export default function DynamicActionIsland({ onOpenMarket }: { onOpenMarket: ()
           >
             {/* Base Image Thumbnail */}
             <label className="flex items-center gap-3 rounded-2xl hover:bg-white/10 p-2 pr-4 transition cursor-pointer shrink-0">
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={uploading} />
+              {materialSlots.map((slot, index) => (
+                <input
+                  key={slot.role}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(event) => void handleFileUpload(event, slot.role)}
+                  disabled={uploading}
+                  aria-label={slot.label || `Material ${index + 1}`}
+                />
+              ))}
               <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-white/10 shadow-inner">
                 {uploading ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">

@@ -94,8 +94,8 @@ export default function Studio() {
     }
 
     hydratedTemplateRef.current = payloadKey;
-    setInputMode('image_to_image');
-    setPromptDraft('');
+    setInputMode((payload.inputMode as any) || 'image_to_image');
+    setPromptDraft(payload.templateContext?.prefilled_params?.prompt || payload.templateName || '');
     upsertOfficialTemplate(payload);
 
     navigate(location.pathname, {
@@ -123,8 +123,8 @@ export default function Studio() {
     })
       .then((payload) => {
         upsertOfficialTemplate(payload);
-        setInputMode('image_to_image');
-        setPromptDraft('');
+        setInputMode((payload.inputMode as any) || 'image_to_image');
+        setPromptDraft(payload.templateContext?.prefilled_params?.prompt || payload.templateName || '');
       })
       .catch((err) => {
         console.error('Failed to hydrate official template:', err);

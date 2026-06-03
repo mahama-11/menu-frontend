@@ -1,5 +1,5 @@
 export type JobMode = 'single' | 'batch' | 'variation' | 'refinement';
-export type StudioInputMode = 'text_to_image' | 'image_to_image';
+export type StudioInputMode = 'text_to_image' | 'image_to_image' | 'multi_image';
 export type JobStatus = 'queued' | 'dispatching' | 'processing' | 'running' | 'completed' | 'failed' | 'canceled';
 export type JobStage =
   | 'queued'
@@ -61,6 +61,15 @@ export interface StylePreset {
 
 export type StudioCreativeSourceType = 'style_preset' | 'template';
 
+export type StudioSourceAssetRole = 'dish_photo' | 'brand_logo' | 'menu_reference' | 'style_reference' | string;
+
+export interface StudioSourceAssetInput {
+  asset_id: string;
+  role: StudioSourceAssetRole;
+  label?: string;
+  required?: boolean;
+}
+
 export interface StudioCreativeSource {
   source_id: string;
   source_type: StudioCreativeSourceType;
@@ -78,6 +87,14 @@ export interface StudioCreativeSource {
   requested_variants?: number;
   target_platform?: string;
   provider?: string;
+  input_mode?: StudioInputMode;
+  generation_strategy?: string;
+  input_slots?: Array<{
+    role: StudioSourceAssetRole;
+    label: string;
+    required?: boolean;
+  }>;
+  resolved_strategy?: Record<string, any>;
   locked?: boolean;
   is_hydrated?: boolean;
   style_preset_id?: string;
@@ -272,10 +289,12 @@ export const StudioBillingErrorCode = {
 export interface CreateJobRequest {
   mode: JobMode;
   input_mode?: StudioInputMode;
+  generation_strategy?: string;
   provider?: string;
   idempotency_key?: string;
   style_preset_id?: string;
   source_asset_ids: string[];
+  source_assets?: StudioSourceAssetInput[];
   prompt?: string;
   requested_variants?: number;
   params?: Record<string, any>;

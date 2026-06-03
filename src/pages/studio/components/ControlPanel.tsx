@@ -4,14 +4,21 @@ import { ArrowRight, Clock3, CreditCard, LayoutGrid, Loader2, Sparkles, Trash2, 
 import { useAssetStore, useGenerationJobStore, useStylePresetStore } from '@/store/studioStore';
 import { useAuthStore, useWalletBalances } from '@/store/authStore';
 import { assetService, generationJobService } from '@/services/studio';
-import { StudioBillingErrorCode } from '@/types/studio';
+import { StudioBillingErrorCode, type StudioSourceAssetRole } from '@/types/studio';
 import { readFileAsDataURL } from '@/utils/file';
 import { buildCreateJobRequestFromCreativeSource, findCreativeSourceByKey } from '@/utils/studioCreativeSource';
 import { getStudioAssetDisplayUrl } from '@/utils/studioAsset';
 
+const DEFAULT_MULTI_IMAGE_SLOTS = [
+  { role: 'dish_photo', label: 'Dish photo', required: true },
+  { role: 'brand_logo', label: 'Brand logo', required: true },
+  { role: 'menu_reference', label: 'Menu reference', required: true },
+  { role: 'style_reference', label: 'Style reference', required: true },
+] as const;
+
 export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => void }) {
   const { t } = useTranslation();
-  const { assets, addAsset, removeAsset, selectAsset, selectedAssetId, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
+  const { assets, addAsset, removeAsset, selectAsset, selectedAssetId, slotAssetsByRole, assignAssetToSlot, promptDraft, setPromptDraft, setInputMode } = useAssetStore();
   const { presets, officialTemplates, selectedSourceKey } = useStylePresetStore();
   const { upsertJob, setActiveJob, startPolling, activeJobId, jobs } = useGenerationJobStore();
   const { usableBalance } = useWalletBalances();
@@ -28,13 +35,20 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
   const isJobProcessing = Boolean(activeJob && ['queued', 'processing', 'running', 'dispatching'].includes(activeJob.status));
   const selectedAsset = assets.find((asset) => asset.asset_id === selectedAssetId);
   const selectedSource = findCreativeSourceByKey(presets, officialTemplates, selectedSourceKey);
+  const materialSlots = selectedSource?.input_slots?.length ? selectedSource.input_slots : DEFAULT_MULTI_IMAGE_SLOTS;
+  const selectedSlotAssets = materialSlots
+    .map((slot) => ({ slot, asset: assets.find((asset) => asset.asset_id === slotAssetsByRole[slot.role]) }))
+    .filter((item) => item.asset);
+  const sourceAssetIds = selectedSlotAssets.map((item) => item.asset!.asset_id);
   const canUseSelectedSource = Boolean(selectedSource && !selectedSource.locked && (selectedSource.source_type !== 'template' || selectedSource.is_hydrated));
-  const hasRequiredSelection = Boolean(selectedAsset && promptDraft.trim());
+  const hasSourceMaterial = sourceAssetIds.length > 0 || Boolean(selectedAssetId);
+  const hasPromptOrTemplate = Boolean(promptDraft.trim() || canUseSelectedSource);
+  const hasRequiredSelection = hasSourceMaterial && hasPromptOrTemplate;
   const railStatusClass = hasRequiredSelection
     ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
     : 'border-white/8 bg-white/[0.04] text-white/60';
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, role: StudioSourceAssetRole = 'dish_photo') => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -51,19 +65,22 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
         file_size: file.size,
         width: 1024,
         height: 1024,
+        metadata: { material_role: role },
       });
       addAsset(newAsset);
+      assignAssetToSlot(role, newAsset.asset_id);
       selectAsset(newAsset.asset_id);
-      setInputMode('image_to_image');
+      setInputMode(Object.keys(slotAssetsByRole).length > 0 ? 'multi_image' : 'image_to_image');
     } catch (error) {
       console.error(error);
     } finally {
+      event.target.value = '';
       setUploading(false);
     }
   };
 
   const handleGenerate = async () => {
-    if (!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource) return;
+    if (!hasSourceMaterial || !canUseSelectedSource) return;
 
     setGenerating(true);
     setBillingError(null);
@@ -71,8 +88,9 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
       const job = await generationJobService.createJob({
         ...buildCreateJobRequestFromCreativeSource({
           source: selectedSource,
-          sourceAssetIds: [selectedAssetId],
-          inputMode: 'image_to_image',
+          sourceAssetIds: sourceAssetIds.length > 0 ? sourceAssetIds : selectedAssetId ? [selectedAssetId] : [],
+          sourceAssetsByRole: slotAssetsByRole,
+          inputMode: sourceAssetIds.length > 1 ? 'multi_image' : 'image_to_image',
           promptOverride: promptDraft.trim(),
         }),
       });
@@ -137,10 +155,21 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
         </div>
 
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <input id="studio-rail-upload" type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={uploading || isJobProcessing} />
+          {materialSlots.map((slot, index) => (
+            <input
+              key={slot.role}
+              id={`studio-rail-upload-${slot.role}`}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={(event) => void handleFileUpload(event, slot.role)}
+              disabled={uploading || isJobProcessing}
+              aria-label={slot.label || `Material ${index + 1}`}
+            />
+          ))}
 
           <button
-            onClick={() => document.getElementById('studio-rail-upload')?.click()}
+            onClick={() => document.getElementById(`studio-rail-upload-${materialSlots[0]?.role || 'dish_photo'}`)?.click()}
             className="interactive-panel flex min-w-[220px] flex-1 items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.04] px-3 py-2.5 text-left transition hover:bg-white/[0.07] disabled:opacity-60"
             disabled={uploading || isJobProcessing}
           >
@@ -172,7 +201,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
             <>
               <button
                 type="button"
-                onClick={() => document.getElementById('studio-rail-upload')?.click()}
+                onClick={() => document.getElementById(`studio-rail-upload-${materialSlots[0]?.role || 'dish_photo'}`)?.click()}
                 className="inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs font-medium text-orange-200 transition hover:bg-white/[0.06]"
                 disabled={uploading || isJobProcessing}
               >
@@ -246,7 +275,7 @@ export default function ControlPanel({ onOpenMarket }: { onOpenMarket: () => voi
           </div>
           <button
             onClick={handleGenerate}
-            disabled={!selectedAssetId || !promptDraft.trim() || !canUseSelectedSource || isJobProcessing || generating}
+            disabled={!hasSourceMaterial || !canUseSelectedSource || isJobProcessing || generating}
             className="relative min-w-[220px] flex-1 overflow-hidden rounded-2xl bg-gradient-to-r from-orange-600 to-orange-500 px-5 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all duration-500 hover:from-orange-500 hover:to-orange-400 hover:shadow-[0_0_30px_rgba(249,115,22,0.45)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:from-orange-600 xl:flex-none"
           >
             <span className="relative z-10 flex items-center justify-center gap-2 text-sm">

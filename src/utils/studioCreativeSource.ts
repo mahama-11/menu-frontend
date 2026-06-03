@@ -1,5 +1,5 @@
 import type { TemplateCatalogSummary, TemplateStudioLaunchPayload } from '@/types/templateCenter';
-import type { CreateJobRequest, StudioCreativeSource, StylePreset, StudioInputMode } from '@/types/studio';
+import type { CreateJobRequest, StudioCreativeSource, StylePreset, StudioInputMode, StudioSourceAssetInput, StudioSourceAssetRole } from '@/types/studio';
 
 export function creativeSourceKey(sourceType: StudioCreativeSource['source_type'], sourceId: string) {
   return `${sourceType}:${sourceId}`;
@@ -34,6 +34,10 @@ export function buildTemplateCreativeSource(payload: TemplateStudioLaunchPayload
       template_context: payload.templateContext,
       export_spec: payload.exportSpec,
     },
+    input_mode: payload.inputMode as StudioInputMode | undefined,
+    generation_strategy: payload.generationStrategy,
+    input_slots: payload.inputSlots,
+    resolved_strategy: payload.resolvedStrategy,
     plan_required: payload.planRequired,
     credits_cost: payload.creditsCost,
     requested_variants: payload.requestedVariants,
@@ -87,21 +91,45 @@ export function findCreativeSourceByKey(
 export function buildCreateJobRequestFromCreativeSource(params: {
   source: StudioCreativeSource | null;
   sourceAssetIds: string[];
+  sourceAssetsByRole?: Partial<Record<StudioSourceAssetRole, string>>;
   inputMode: StudioInputMode;
   promptOverride?: string;
 }): CreateJobRequest {
-  const { source, sourceAssetIds, inputMode, promptOverride } = params;
-  const effectivePrompt = promptOverride?.trim() || undefined;
+  const { source, sourceAssetIds, sourceAssetsByRole, inputMode, promptOverride } = params;
+  const effectivePrompt = promptOverride?.trim() || source?.prompt || source?.description || source?.title || undefined;
   const templateContext = (source?.metadata?.template_context as Record<string, any> | undefined) || {};
   const prefilledParams = (templateContext.prefilled_params as Record<string, any> | undefined) || {};
   const prefilledMetadata = (templateContext.prefilled_metadata as Record<string, any> | undefined) || {};
+  const sourceSlots = source?.input_slots || (templateContext.input_slots as StudioCreativeSource['input_slots'] | undefined) || [];
+  const sourceAssets: StudioSourceAssetInput[] = sourceSlots
+    .map((slot, index) => {
+      const assetId = sourceAssetsByRole?.[slot.role] || sourceAssetIds[index];
+      if (!assetId) return null;
+      const asset: StudioSourceAssetInput = {
+        asset_id: assetId,
+        role: slot.role,
+        label: slot.label,
+        required: slot.required,
+      };
+      return asset;
+    })
+    .filter((item): item is StudioSourceAssetInput => item !== null);
+  const canonicalAssetIds = sourceAssets.length > 0
+    ? sourceAssets.map((item) => item.asset_id)
+    : sourceAssetIds;
+  const strategyInputMode = (source?.input_mode || source?.resolved_strategy?.input_mode) as StudioInputMode | undefined;
+  const effectiveInputMode: StudioInputMode = strategyInputMode || (sourceAssets.length > 1 ? 'multi_image' : inputMode);
+  const effectiveGenerationStrategy = source?.generation_strategy || source?.resolved_strategy?.generation_strategy || (effectiveInputMode === 'multi_image' ? 'multi_image' : undefined);
+  const effectiveProvider = source?.provider || source?.resolved_strategy?.provider || (effectiveInputMode === 'multi_image' ? 'comfyui_bridge' : undefined);
 
   const request: CreateJobRequest = {
     mode: 'single',
-    input_mode: inputMode,
-    source_asset_ids: sourceAssetIds,
+    input_mode: effectiveInputMode,
+    generation_strategy: effectiveGenerationStrategy,
+    source_asset_ids: canonicalAssetIds,
+    source_assets: sourceAssets.length > 0 ? sourceAssets : undefined,
     style_preset_id: source?.source_type === 'style_preset' ? source.style_preset_id : undefined,
-    provider: source?.provider,
+    provider: effectiveProvider,
     prompt: effectivePrompt,
     requested_variants: source?.requested_variants || 4,
     params: {

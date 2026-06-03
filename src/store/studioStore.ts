@@ -5,6 +5,7 @@ import type {
   StudioCreativeSource,
   GenerationJob,
   StudioInputMode,
+  StudioSourceAssetRole,
 } from '@/types/studio';
 import type { TemplateStudioLaunchPayload } from '@/types/templateCenter';
 import { buildTemplateCreativeSource, creativeSourceKey } from '@/utils/studioCreativeSource';
@@ -39,6 +40,7 @@ function mergeGenerationJobDisplayState(current: GenerationJob, incoming: Genera
 interface AssetStoreState {
   assets: StudioAsset[];
   selectedAssetId: string | null;
+  slotAssetsByRole: Partial<Record<StudioSourceAssetRole, string>>;
   inputMode: StudioInputMode;
   promptDraft: string;
   loading: boolean;
@@ -47,6 +49,8 @@ interface AssetStoreState {
   addAsset: (asset: StudioAsset) => void;
   removeAsset: (id: string) => void;
   selectAsset: (id: string | null) => void;
+  assignAssetToSlot: (role: StudioSourceAssetRole, assetId: string) => void;
+  clearSlotAsset: (role: StudioSourceAssetRole) => void;
   setInputMode: (mode: StudioInputMode) => void;
   setPromptDraft: (prompt: string) => void;
   resetAssetSession: () => void;
@@ -55,6 +59,7 @@ interface AssetStoreState {
 export const useAssetStore = create<AssetStoreState>((set) => ({
   assets: [],
   selectedAssetId: null,
+  slotAssetsByRole: {},
   inputMode: 'image_to_image',
   promptDraft: '',
   loading: false,
@@ -75,8 +80,22 @@ export const useAssetStore = create<AssetStoreState>((set) => ({
   removeAsset: (id) => set((state) => ({
     assets: state.assets.filter((asset) => asset.asset_id !== id),
     selectedAssetId: state.selectedAssetId === id ? null : state.selectedAssetId,
+    slotAssetsByRole: Object.fromEntries(
+      Object.entries(state.slotAssetsByRole).filter(([, assetId]) => assetId !== id),
+    ),
   })),
   selectAsset: (id) => set({ selectedAssetId: id }),
+  assignAssetToSlot: (role, assetId) => set((state) => ({
+    slotAssetsByRole: {
+      ...state.slotAssetsByRole,
+      [role]: assetId,
+    },
+  })),
+  clearSlotAsset: (role) => set((state) => {
+    const next = { ...state.slotAssetsByRole };
+    delete next[role];
+    return { slotAssetsByRole: next };
+  }),
   setInputMode: (mode) => set((state) => ({
     inputMode: mode,
     selectedAssetId: mode === 'text_to_image' ? null : state.selectedAssetId,
@@ -85,6 +104,7 @@ export const useAssetStore = create<AssetStoreState>((set) => ({
   resetAssetSession: () => set({
     assets: [],
     selectedAssetId: null,
+    slotAssetsByRole: {},
     inputMode: 'image_to_image',
     promptDraft: '',
   }),

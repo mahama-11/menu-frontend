@@ -56,6 +56,21 @@ export interface TemplateCatalogExample {
   updated_at?: string;
 }
 
+export interface TemplateInputSlot {
+  role: string;
+  label: string;
+  required?: boolean;
+  description?: string;
+  accepted_types?: string[];
+}
+
+export interface TemplateResolvedStrategy {
+  input_mode?: string;
+  generation_strategy?: string;
+  provider?: string;
+  [key: string]: any;
+}
+
 export interface TemplateCatalogDetail extends TemplateCatalogSummary {
   current_version_id: string;
   prompt_templates: Record<string, string>;
@@ -66,6 +81,9 @@ export interface TemplateCatalogDetail extends TemplateCatalogSummary {
   input_schema: Record<string, any>;
   execution_profile: Record<string, any>;
   examples: TemplateCatalogExample[];
+  input_slots?: TemplateInputSlot[];
+  target_outputs?: Array<Record<string, any>>;
+  business_goal?: string;
   metadata?: Record<string, any>;
 }
 
@@ -95,11 +113,16 @@ export interface TemplateUseResult {
   prefilled_job: {
     mode: string;
     provider?: string;
+    input_mode?: string;
+    generation_strategy?: string;
     prompt?: string;
     requested_variants?: number;
     params?: Record<string, any>;
     metadata?: Record<string, any>;
   };
+  input_slots?: TemplateInputSlot[];
+  target_outputs?: Array<Record<string, any>>;
+  resolved_strategy?: TemplateResolvedStrategy;
   template_context?: Record<string, any>;
 }
 
@@ -128,6 +151,10 @@ export interface TemplateStudioLaunchPayload {
   creditsCost: number;
   planRequired: string;
   provider?: string;
+  inputMode?: string;
+  generationStrategy?: string;
+  inputSlots?: TemplateInputSlot[];
+  resolvedStrategy?: TemplateResolvedStrategy;
   exportSpec?: Record<string, any>;
   templateContext?: Record<string, any>;
 }

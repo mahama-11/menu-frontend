@@ -81,6 +81,11 @@ export function buildStudioLaunchPayload(
   useResult: TemplateUseResult,
   targetPlatform: string,
 ): TemplateStudioLaunchPayload {
+  const inputSlots = useResult.input_slots || detail.input_slots || [];
+  const resolvedStrategy = useResult.resolved_strategy || {};
+  const inputMode = useResult.prefilled_job.input_mode || resolvedStrategy.input_mode;
+  const generationStrategy = useResult.prefilled_job.generation_strategy || resolvedStrategy.generation_strategy;
+
   return {
     templateId: useResult.template_id,
     templateVersionId: useResult.template_version_id,
@@ -92,10 +97,17 @@ export function buildStudioLaunchPayload(
     requestedVariants: useResult.prefilled_job.requested_variants || 1,
     creditsCost: useResult.credits_cost,
     planRequired: useResult.plan_required,
-    provider: useResult.prefilled_job.provider,
+    provider: useResult.prefilled_job.provider || resolvedStrategy.provider,
+    inputMode,
+    generationStrategy,
+    inputSlots,
+    resolvedStrategy,
     exportSpec: useResult.template_context?.export_spec as Record<string, any> | undefined,
     templateContext: {
       ...useResult.template_context,
+      input_slots: inputSlots,
+      target_outputs: useResult.target_outputs || detail.target_outputs,
+      resolved_strategy: resolvedStrategy,
       prefilled_params: useResult.prefilled_job.params,
       prefilled_metadata: useResult.prefilled_job.metadata,
     },
