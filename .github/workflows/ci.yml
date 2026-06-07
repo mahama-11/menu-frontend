@@ -1,0 +1,101 @@
+name: Menu Frontend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_visual:
+        description: Run visual desktop/mobile Playwright projects
+        required: false
+        default: 'false'
+  schedule:
+    - cron: '30 20 * * *'
+
+jobs:
+  quality:
+    name: type/build/governance/e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint with zero warnings
+        run: npm run lint -- --max-warnings=0
+
+      - name: i18n key check
+        run: npm run check:i18n
+
+      - name: Build
+        run: npm run build
+
+      - name: Acceptance governance gate
+        run: npm run acceptance:governance
+
+      - name: Frontend automation gate
+        run: npm run frontend:gate
+
+      - name: Mocked business E2E
+        run: npm run test:e2e -- --reporter=list
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: menu-frontend-playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
+  visual:
+    name: visual desktop/mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_visual == 'true')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Visual desktop/mobile gate
+        run: npm run test:visual -- --reporter=list
+
+      - name: Upload visual artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: menu-frontend-visual-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

@@ -35,7 +35,8 @@ V-Menu is an independent product line focused on AI-powered food photography enh
 ### 3.1 Documentation Index
 - [**Developer Guide**](docs/DEVELOPER_GUIDE.md): Frontend standards, Tailwind v4 rules, Zustand usage, and deployment boundary notes.
 - [**Architecture Principles**](docs/architecture/PRINCIPLES.md): Core UI/UX rules, Glassmorphism guidelines, Mobile First strategy, and shared identity constraints.
-- [**Studio Integration Guide**](../../v-menu-backend/docs/architecture/STUDIO_FRONTEND_INTEGRATION.md): Mandatory rules for integrating the backend AI image processing task system (`StudioAsset`, `StylePreset`, `GenerationJob`, `GenerationVariant`).
+- [**Menu Quality Assurance Gap Closure Plan**](docs/menu-quality-assurance-gap-closure-plan.md): Cross-repo Menu QA closure plan covering ATDD/BDD, contract governance, CI, live smoke, SelfCheck, observability, and phased gap closure.
+- [**Studio Integration Guide**](../menu-backend/docs/architecture/STUDIO_FRONTEND_INTEGRATION.md): Mandatory rules for integrating the backend AI image processing task system (`StudioAsset`, `StylePreset`, `GenerationJob`, `GenerationVariant`).
 
 ### 3.2 Code Map
 | Path | Description |

@@ -67,6 +67,7 @@ export const templateUseResult = {
 };
 
 export async function mockMenuCriticalApis(page: Page, overrides: { insufficient?: boolean } = {}) {
+  let studioAssetSequence = 0;
   await page.route('**/api/v1/menu/auth/register', route => json(route, menuAuthResponse));
   await page.route('**/api/v1/menu/auth/login', route => json(route, menuAuthResponse));
   await page.route('**/api/v1/menu/auth/session', route => json(route, { authenticated: true, user: menuAuthResponse.user, access: menuAuthResponse.access, credits: { balance: 20 } }));
@@ -88,7 +89,16 @@ export async function mockMenuCriticalApis(page: Page, overrides: { insufficient
   await page.route('**/api/v1/menu/template-center/catalog', route => json(route, { items: [multiImageTemplate] }));
   await page.route('**/api/v1/menu/template-center/catalog/tpl-menu-multi-hero', route => json(route, multiImageTemplate));
   await page.route('**/api/v1/menu/template-center/catalog/tpl-menu-multi-hero/use', route => json(route, templateUseResult));
-  await page.route('**/api/v1/menu/studio/assets', route => json(route, { asset_id: `asset-${Date.now()}`, asset_type: 'source', source_type: 'upload', status: 'ready', file_name: 'qa.png', source_url: 'data:image/png;base64,iVBORw0KGgo=', preview_url: 'data:image/png;base64,iVBORw0KGgo=' }));
+  await page.route('**/api/v1/menu/studio/assets', route => {
+    if (route.request().method() !== 'POST') return json(route, { items: [], total: 0 });
+    studioAssetSequence += 1;
+    const payload = route.request().postDataJSON() as { metadata?: { material_role?: string }, file_name?: string };
+    const role = payload.metadata?.material_role;
+    const assetId = role && ['dish_photo', 'brand_logo', 'menu_reference', 'style_reference'].includes(role)
+      ? `asset-${['dish_photo', 'brand_logo', 'menu_reference', 'style_reference'].indexOf(role) + 1}`
+      : `asset-${studioAssetSequence}`;
+    return json(route, { asset_id: assetId, asset_type: 'source', source_type: 'upload', status: 'ready', file_name: payload.file_name || `qa-${studioAssetSequence}.png`, source_url: 'data:image/png;base64,iVBORw0KGgo=', preview_url: 'data:image/png;base64,iVBORw0KGgo=' });
+  });
   await page.route('**/api/v1/menu/studio/styles**', route => json(route, { items: [] }));
   await page.route('**/api/v1/menu/studio/jobs', async route => {
     if (route.request().method() !== 'POST') return json(route, { items: [] });

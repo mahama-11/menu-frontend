@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { getDashboardText } from './copy';
-import { MetricCard, DetailStat, SelectFilter, buildLabelMap, labelFor, platformSummary } from './DashboardTemplateCenterHelpers';
+import { MetricCard, DetailStat, SelectFilter } from './DashboardTemplateCenterHelpers';
+import { buildLabelMap, labelFor, platformSummary } from './templateCenterLabels';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { useAuthStore } from '@/store/authStore';
 import { useCommercialStore } from '@/store/commercialStore';
