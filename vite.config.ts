@@ -54,11 +54,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/v1/menu': {
-        target: 'http://localhost:8096',
+        target: 'http://localhost:8196',
         changeOrigin: true,
       },
       '/api/v1/platform': {
-        target: 'http://localhost:8095',
+        target: 'http://localhost:8195',
         changeOrigin: true,
       },
     },

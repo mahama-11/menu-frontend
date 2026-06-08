@@ -8,13 +8,13 @@ async function mockLandingApis(page: import('@playwright/test').Page) {
   }));
 }
 
-test('has title', async ({ page }) => {
+test('@mock has title', async ({ page }) => {
   await mockLandingApis(page);
   await page.goto('/');
   await expect(page).toHaveTitle(/AI Menu Growth Engine/);
 });
 
-test('can navigate to login', async ({ page }) => {
+test('@mock can navigate to login', async ({ page }) => {
   await mockLandingApis(page);
   await page.goto('/');
   const loginLink = page.locator('a[href="/login"]').first();

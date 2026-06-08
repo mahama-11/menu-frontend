@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { expectNoInternalRuntimeCopy, injectMenuSession, mockMenuCriticalApis } from './menu.fixtures';
 
-test('@critical @smoke P0-1 dashboard shows allowance after authenticated bootstrap', async ({ page }) => {
+test('@critical @smoke @mock P0-1 dashboard shows allowance after authenticated bootstrap', async ({ page }) => {
   await mockMenuCriticalApis(page);
   await injectMenuSession(page);
   await page.goto('/dashboard');
@@ -10,7 +10,7 @@ test('@critical @smoke P0-1 dashboard shows allowance after authenticated bootst
   await expectNoInternalRuntimeCopy(page);
 });
 
-test('@critical @smoke protected template center route renders with mocked catalog', async ({ page }) => {
+test('@critical @smoke @mock protected template center route renders with mocked catalog', async ({ page }) => {
   await mockMenuCriticalApis(page);
   await injectMenuSession(page);
   await page.goto('/dashboard/templates');

@@ -19,7 +19,7 @@ import type {
   StyleCategory,
   StyleVisibility
 } from '@/types/style';
-import { styleService, processingService, MOCK_PRESETS } from '@/services/style';
+import { styleService, processingService } from '@/services/style';
 
 // ==================== State 定义 ====================
 
@@ -141,9 +141,7 @@ export const useStyleStore = create<StyleState>((set, get) => ({
     set({ presetsLoading: true });
 
     try {
-      // MVP 阶段使用 mock 数据
-      // const presets = await styleService.listPresets();
-      const presets = MOCK_PRESETS;
+      const presets = await styleService.listPresets();
 
       set({
         presets,

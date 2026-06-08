@@ -16,7 +16,8 @@
 - `menu-frontend`：`npm run check:i18n` → PASS
 - `menu-frontend`：`npm run build` → PASS
 - `menu-frontend`：`npm run lint` → 0 errors，3 warnings（Fast Refresh 组件/工具导出混用）
-- `menu-frontend`：`npm run test:e2e -- --reporter=list` → 12 passed
+- `menu-frontend`：`npm run test:e2e:mock -- --reporter=list` → mocked/offline regression 12 passed
+- `menu-frontend`：`npm run test:e2e` 现在是 real API 优先入口；没有 local/dev fixture token、write approval 与 cleanup acknowledgement 会 fail-closed 拒绝执行
 - `menu-frontend`：`npm run test:visual -- --reporter=list` → 6 passed
 - `menu-backend`：`node --check scripts/menu-contract-smoke.mjs` → PASS
 - `menu-backend`：`node --check tests/smoke/menu-contract-smoke.mjs` → PASS
@@ -44,9 +45,9 @@
 - Consumer sweep 必须检查前端实际 payload 字段与 Go DTO 同步。
 - 真实 API smoke 必须断言 runtime manifest 中存在 role-aware `source_assets[]`、`input_mode=multi_image`、`provider=comfyui_bridge`。
 
-### G2. 前端 E2E 仍以 mock 为主，不能代表 live business closure
+### G2. 前端 E2E 已拆成 mocked/offline 与 real API，不能再混报
 
-当前 Playwright 覆盖了真实 UI 行为和请求 payload，但 API 响应由 fixture mock。
+当前 Playwright 保留 mocked/offline regression 来稳定验证 UI 编排和错误态；默认 `npm run test:e2e` 已改为 real API 入口，必须提供 local/dev fixture token、写入批准和 cleanup acknowledgement，否则 fail-closed。
 
 风险：无法证明真实 `menu-backend`、Platform commercial/runtime、storage、provider route、billing ledger 联通。
 

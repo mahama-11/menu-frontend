@@ -12,6 +12,12 @@ This is the human-readable companion to `contract-governance/critical-journeys.j
 | P1-1 | History / Library 回看 | Release note | source/result/selected asset read model |
 | P1-2 | 移动端 / i18n / 长文案布局 | Release note | zh/en/th desktop+mobile visual smoke |
 
+## Evidence mode policy
+
+- `test:e2e` = real API browser smoke. It uses the frontend service/proxy path and real Menu backend endpoints; it requires `MENU_E2E_REAL_API=1`, fixture token/org id, write approval, and cleanup acknowledgement.
+- `test:e2e:mock` = mocked/offline regression. It is allowed for deterministic UI/payload/error-state coverage only and should be reported separately as mock evidence.
+- Full P0/P1 closure requires real API or local/dev safe-smoke evidence; mocked/offline browser PASS alone is at most `PARTIAL_PASS` / `PASS_WITH_NOTES` depending on scope.
+
 ## External dependency note
 
 Menu may be `PASS` while real generation is `BLOCKED by ComfyUI 8188` when the product request, runtime manifest, and provider route are correct but downstream ComfyUI core is unreachable. Do not downgrade product wiring to FAIL unless Menu loses request semantics, persistence, or fail-closed behavior. Use PASS_WITH_NOTES when Menu journeys are executable but visual/i18n/provider-readiness notes remain non-blocking.

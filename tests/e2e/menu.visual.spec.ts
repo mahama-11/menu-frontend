@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { expectNoInternalRuntimeCopy, injectMenuSession, mockMenuCriticalApis } from './menu.fixtures';
 
 for (const target of ['/dashboard', '/dashboard/templates', '/studio']) {
-  test(`@critical @visual P1-2 ${target} has no horizontal overflow`, async ({ page }) => {
+  test(`@critical @visual @mock P1-2 ${target} has no horizontal overflow`, async ({ page }) => {
     await mockMenuCriticalApis(page);
     await injectMenuSession(page);
     await page.goto(target);

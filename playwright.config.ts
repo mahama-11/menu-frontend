@@ -28,6 +28,12 @@ export default defineConfig({
     {
       name: 'chromium-smoke',
       testMatch: /.*\.spec\.ts/,
+      testIgnore: /.*real-api\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'chromium-real-api',
+      testMatch: /.*real-api\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {

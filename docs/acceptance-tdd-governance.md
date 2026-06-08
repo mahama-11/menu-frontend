@@ -4,6 +4,12 @@
 
 Menu release quality is judged by executable critical journeys, not by `typecheck/build passed` alone. This governance file converts the Menu business promise into acceptance examples, frontend/runtime gates, backend/API smoke, and SelfCheck evidence.
 
+## Evidence mode policy
+
+- `npm run test:e2e` is the **real API** browser entry and must fail closed unless a local/dev fixture token, org id, write approval, and cleanup acknowledgement are provided.
+- `npm run test:e2e:mock` is an explicitly named mocked/offline regression suite. It is useful for deterministic UI states and rare error cases, but it must never be reported as live backend/runtime closure.
+- Any mocked/offline Playwright spec must carry `@mock`; the real API spec must not use `page.route`, `route.fulfill`, or mock helpers.
+
 ## Status vocabulary
 
 - `PASS`: product route, frontend interaction, backend/API state, and Platform/runtime dependency all passed.

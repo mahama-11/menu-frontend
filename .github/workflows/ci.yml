@@ -54,7 +54,7 @@ jobs:
         run: npm run frontend:gate
 
       - name: Mocked business E2E
-        run: npm run test:e2e -- --reporter=list
+        run: npm run test:e2e:mock -- --reporter=list
 
       - name: Upload Playwright artifacts on failure
         if: failure()

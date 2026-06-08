@@ -7,10 +7,12 @@ const requiredFiles = [
   'docs/templates/frontend-cta-acceptance-matrix.md',
   'contract-governance/critical-journeys.json',
   'tests/e2e/menu.fixtures.ts',
+  'tests/e2e/menu.real-api.spec.ts',
   'tests/e2e/menu.smoke.spec.ts',
   'tests/e2e/menu.visual.spec.ts',
   'tests/e2e/menu.studio.spec.ts',
-  'tests/e2e/menu.template-center.spec.ts'
+  'tests/e2e/menu.template-center.spec.ts',
+  'scripts/menu-real-e2e-preflight.mjs'
 ];
 
 const requiredJourneyIds = ['P0-1','P0-2','P0-3','P0-4','P0-5','P1-1','P1-2'];
@@ -33,10 +35,17 @@ if (fs.existsSync('contract-governance/critical-journeys.json')) {
 for (const file of ['docs/acceptance-tdd-governance.md', 'docs/menu-critical-journeys.md']) {
   if (fs.existsSync(file)) {
     const text = fs.readFileSync(file, 'utf8');
-    for (const needle of ['P0-1', 'P0-4', 'multi_image', 'PASS_WITH_NOTES', 'BLOCKED']) {
+    for (const needle of ['P0-1', 'P0-4', 'multi_image', 'PASS_WITH_NOTES', 'BLOCKED', 'real API', 'mock']) {
       if (!text.includes(needle)) failures.push(`${file} missing ${needle}`);
     }
   }
+}
+const pkg = fs.existsSync('package.json') ? JSON.parse(fs.readFileSync('package.json', 'utf8')) : {};
+if (pkg.scripts?.['test:e2e'] !== 'npm run test:e2e:real') {
+  failures.push('test:e2e must be real-first; mocked regression must be explicit test:e2e:mock');
+}
+if (!pkg.scripts?.['ci:quick']?.includes('test:e2e:mock')) {
+  failures.push('ci:quick should call explicitly named mocked/offline regression, not ambiguous test:e2e');
 }
 if (failures.length) {
   console.error('Menu acceptance governance gate FAIL');

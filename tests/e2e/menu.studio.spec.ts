@@ -17,7 +17,7 @@ async function selectOfficialTemplate(page: import('@playwright/test').Page) {
   await expect(page.getByRole('button', { name: /Generate/i }).last()).toBeEnabled();
 }
 
-test('@critical P0-3 Studio route renders generation status language without internal runtime copy', async ({ page }) => {
+test('@critical @mock P0-3 Studio route renders generation status language without internal runtime copy', async ({ page }) => {
   await mockMenuCriticalApis(page);
   await injectMenuSession(page);
   await page.goto('/studio');
@@ -25,7 +25,7 @@ test('@critical P0-3 Studio route renders generation status language without int
   await expectNoInternalRuntimeCopy(page);
 });
 
-test('@critical P0-4 multi-image UI job request keeps four role-aware source assets and comfyui route', async ({ page }) => {
+test('@critical @mock P0-4 multi-image UI job request keeps four role-aware source assets and comfyui route', async ({ page }) => {
   await mockMenuCriticalApis(page);
   await injectMenuSession(page);
   let capturedPayload: any = null;
@@ -50,7 +50,7 @@ test('@critical P0-4 multi-image UI job request keeps four role-aware source ass
   expect(capturedPayload.source_assets).toHaveLength(4);
 });
 
-test('@critical P0-5 insufficient allowance error is sanitized and fail-closed through Studio UI', async ({ page }) => {
+test('@critical @mock P0-5 insufficient allowance error is sanitized and fail-closed through Studio UI', async ({ page }) => {
   await mockMenuCriticalApis(page, { insufficient: true });
   await injectMenuSession(page);
   let jobCreateAttempts = 0;

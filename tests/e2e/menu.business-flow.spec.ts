@@ -31,7 +31,7 @@ async function uploadAllRequiredMaterials(page: Page) {
   }
 }
 
-test('@critical @business template-to-studio generation completes with role-aware assets and result actions', async ({ page }) => {
+test('@critical @business @mock template-to-studio generation completes with role-aware assets and result actions', async ({ page }) => {
   const consoleErrors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') {

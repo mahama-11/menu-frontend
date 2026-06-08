@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { injectMenuSession, mockMenuCriticalApis, templateUseResult } from './menu.fixtures';
 
-test('@critical P0-2 Template Center use payload preserves Studio handoff contract', async ({ page }) => {
+test('@critical @mock P0-2 Template Center use payload preserves Studio handoff contract', async ({ page }) => {
   await mockMenuCriticalApis(page);
   await injectMenuSession(page);
 
